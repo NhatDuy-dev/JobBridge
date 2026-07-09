@@ -387,9 +387,25 @@ textarea:focus {
   font-weight: 900;
 }
 
+.brand-logo {
+  display: block;
+  width: 132px;
+  height: auto;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.spa-topbar .brand-logo {
+  width: 142px;
+}
+
+.spa-login-brand .brand-logo {
+  width: 168px;
+}
+
 .spa-login-brand strong,
 .spa-brand strong {
-  display: block;
+  display: none;
   color: var(--navy);
   font-size: 20px;
 }

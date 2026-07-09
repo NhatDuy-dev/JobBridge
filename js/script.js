@@ -442,7 +442,7 @@ function renderLogin() {
       <section class="auth-shell" aria-label="Xác thực JobBridge">
         <div class="auth-visual">
           <div class="spa-login-brand">
-            <span class="brand-mark">JB</span>
+            ${renderBrandLogo()}
             <div>
               <strong>JobBridge</strong>
               <span>Nền tảng tuyển dụng & ứng tuyển việc làm</span>
@@ -663,7 +663,7 @@ function renderDashboard() {
   app.innerHTML = `
     <header class="spa-topbar">
       <div class="spa-brand">
-        <span class="brand-mark">JB</span>
+        ${renderBrandLogo()}
         <div>
           <strong>JobBridge</strong>
           <span>${roleLabel}</span>
@@ -709,6 +709,10 @@ function renderSiteNavigation() {
         .join("")}
     </nav>
   `;
+}
+
+function renderBrandLogo() {
+  return `<img class="brand-logo" src="../assets/jobbridge-logo.png" alt="JobBridge" />`;
 }
 
 function renderTopbarUserArea(user) {
