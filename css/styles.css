@@ -583,6 +583,14 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.job-live-time {
+  display: inline-flex;
+  margin-top: 4px;
+  color: #00a86b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .job-description {
   margin-bottom: 0;
   line-height: 1.55;
@@ -2082,6 +2090,13 @@ body {
 
 .job-market-heading strong span {
   color: #00a86b;
+}
+
+.job-market-heading em {
+  color: #667085;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .job-market-heading p {

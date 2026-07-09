@@ -238,8 +238,10 @@ const appState = {
 };
 
 const app = document.querySelector("#app");
+let realtimeUpdateTimer = null;
 
 document.addEventListener("DOMContentLoaded", initApp);
+window.addEventListener("storage", handleRealtimeStorageUpdate);
 
 function initApp() {
   bootMockDatabase();
@@ -257,6 +259,16 @@ function initApp() {
   } else {
     renderLogin();
   }
+}
+
+function handleRealtimeStorageUpdate(event) {
+  if (!appState.currentUser || event.key !== STORAGE_KEYS.jobs) return;
+
+  appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
+  if (appState.currentUser.role === "candidate") renderCandidateView();
+  if (appState.currentUser.role === "employer") renderEmployerView();
+  if (appState.currentUser.role === "admin") renderAdminView();
+  refreshRealtimeLabels();
 }
 
 function bootMockDatabase() {
@@ -311,11 +323,16 @@ function normalizeJob(job) {
   const maxSalary = Number.isFinite(job.maxSalary)
     ? job.maxSalary
     : salaryNumbers[salaryNumbers.length - 1] || minSalary;
+  const now = new Date().toISOString();
+  const createdAt = job.createdAt || job.postedAt || job.updatedAt || now;
+  const updatedAt = job.updatedAt || createdAt;
 
   const normalizedJob = {
     ...job,
     minSalary,
     maxSalary,
+    createdAt,
+    updatedAt,
     type: job.type || (job.location === "Remote" ? "Remote" : "Full-time"),
   };
 
@@ -667,6 +684,8 @@ function renderDashboard() {
   if (user.role === "candidate") renderCandidateView();
   if (user.role === "employer") renderEmployerView();
   if (user.role === "admin") renderAdminView();
+
+  startRealtimeUpdates();
 }
 
 function renderSiteNavigation() {
@@ -817,6 +836,7 @@ function bindCandidateAccountMenu() {
 }
 
 function logout() {
+  stopRealtimeUpdates();
   localStorage.removeItem(STORAGE_KEYS.session);
   appState.currentUser = null;
   appState.authMode = "login";
@@ -1014,12 +1034,17 @@ function renderCandidateView() {
 }
 
 function renderCareerCategoryRail() {
+  const approvedJobCount = appState.jobs.filter((job) => job.status === "Approved").length;
+  const marketJobCount = 51610 + approvedJobCount;
+  const currentYear = new Date().getFullYear();
+  const updateLabel = formatLiveUpdateTime(new Date());
+
   return `
     <section class="job-market-strip">
       <div class="job-market-heading">
         <div>
-          <strong>Tuyển dụng <span>51.613 việc làm</span> [Update 08/07/2026]</strong>
-          <p>Trang chủ <span>/</span> Tuyển dụng 51.613 việc làm 2026 [Update 08/07/2026]</p>
+          <strong>Tuyển dụng <span>${formatNumber(marketJobCount)} việc làm</span> <em data-live-updated-at>${updateLabel}</em></strong>
+          <p>Trang chủ <span>/</span> Tuyển dụng ${formatNumber(marketJobCount)} việc làm ${currentYear} <em data-live-updated-at>${updateLabel}</em></p>
         </div>
         <button class="job-alert-button" data-create-job-alert type="button">Tạo thông báo việc làm</button>
       </div>
@@ -1375,6 +1400,7 @@ function renderCandidateJobCard(job) {
         <div class="job-title-group">
           <h3>${escapeHtml(job.title)}</h3>
           <p>${escapeHtml(job.company)} - ${escapeHtml(job.location)}</p>
+          <small class="job-live-time" data-job-relative-time="${escapeHtml(job.updatedAt)}">Cập nhật ${formatRelativeTime(job.updatedAt)}</small>
         </div>
         <button class="heart-button ${saved ? "active" : ""}" data-save-job="${job.id}" type="button" aria-label="Luu viec lam">
           ${saved ? "&#9829;" : "&#9825;"}
@@ -1434,6 +1460,7 @@ function renderCandidateSpotlight(job) {
         <p class="eyebrow">Goi y phu hop nhat</p>
         <h3>${escapeHtml(job.title)}</h3>
         <p>${escapeHtml(job.company)} - ${escapeHtml(job.location)} - ${escapeHtml(job.salary)}</p>
+        <small class="job-live-time" data-job-relative-time="${escapeHtml(job.updatedAt)}">Cập nhật ${formatRelativeTime(job.updatedAt)}</small>
       </div>
       <div class="spotlight-score">
         <strong>${matchScore}%</strong>
@@ -1481,6 +1508,7 @@ function openJobDetailModal(jobId) {
             <span>${escapeHtml(job.location)}</span>
             <span>${escapeHtml(job.type)}</span>
             <span>${escapeHtml(job.status)}</span>
+            <span data-job-relative-time="${escapeHtml(job.updatedAt)}">Cập nhật ${formatRelativeTime(job.updatedAt)}</span>
           </div>
 
           <div class="job-detail-match">
@@ -1563,19 +1591,21 @@ function getFilteredApprovedJobs() {
   const keyword = appState.candidateKeyword.trim().toLowerCase();
   const { location, types, minSalary, saturday, categories, experiences, companyField, jobField } = appState.candidateFilters;
 
-  return appState.jobs.filter((job) => {
-    const searchable = `${job.title} ${job.company} ${job.location} ${job.salary} ${job.description} ${job.category} ${job.experience}`.toLowerCase();
-    const matchKeyword = !keyword || searchable.includes(keyword);
-    const matchLocation = !location || job.location === location;
-    const matchType = types.length === 0 || types.includes(job.type);
-    const matchSalary = job.maxSalary >= minSalary;
-    const matchSaturday = !saturday || job.saturday === saturday;
-    const matchCategory = categories.length === 0 || categories.includes(job.category);
-    const matchExperience = experiences.length === 0 || experiences.includes(job.experience);
-    const matchCompanyField = !companyField || job.companyField === companyField;
-    const matchJobField = !jobField || job.jobField === jobField;
-    return job.status === "Approved" && matchKeyword && matchLocation && matchType && matchSalary && matchSaturday && matchCategory && matchExperience && matchCompanyField && matchJobField;
-  });
+  return appState.jobs
+    .filter((job) => {
+      const searchable = `${job.title} ${job.company} ${job.location} ${job.salary} ${job.description} ${job.category} ${job.experience}`.toLowerCase();
+      const matchKeyword = !keyword || searchable.includes(keyword);
+      const matchLocation = !location || job.location === location;
+      const matchType = types.length === 0 || types.includes(job.type);
+      const matchSalary = job.maxSalary >= minSalary;
+      const matchSaturday = !saturday || job.saturday === saturday;
+      const matchCategory = categories.length === 0 || categories.includes(job.category);
+      const matchExperience = experiences.length === 0 || experiences.includes(job.experience);
+      const matchCompanyField = !companyField || job.companyField === companyField;
+      const matchJobField = !jobField || job.jobField === jobField;
+      return job.status === "Approved" && matchKeyword && matchLocation && matchType && matchSalary && matchSaturday && matchCategory && matchExperience && matchCompanyField && matchJobField;
+    })
+    .sort((first, second) => getJobTimestamp(second) - getJobTimestamp(first));
 }
 
 function applyJob(jobId) {
@@ -1857,6 +1887,7 @@ function createPendingJob(event) {
     return;
   }
 
+  const now = new Date().toISOString();
   appState.jobs.unshift(normalizeJob({
     id: Date.now(),
     title,
@@ -1866,6 +1897,8 @@ function createPendingJob(event) {
     type: "Full-time",
     status: "Pending",
     description,
+    createdAt: now,
+    updatedAt: now,
   }));
   writeStorage(STORAGE_KEYS.jobs, appState.jobs);
   event.target.reset();
@@ -2022,7 +2055,9 @@ function renderPendingJobTable() {
 }
 
 function updateJobStatus(jobId, status) {
-  appState.jobs = appState.jobs.map((job) => (job.id === jobId ? { ...job, status } : job));
+  appState.jobs = appState.jobs.map((job) =>
+    job.id === jobId ? normalizeJob({ ...job, status, updatedAt: new Date().toISOString() }) : job,
+  );
   writeStorage(STORAGE_KEYS.jobs, appState.jobs);
   renderAdminView();
 }
@@ -2060,6 +2095,50 @@ function getRoleLabel(role) {
     admin: "Quan tri vien",
   };
   return labels[role] || role;
+}
+
+function startRealtimeUpdates() {
+  stopRealtimeUpdates();
+  refreshRealtimeLabels();
+  realtimeUpdateTimer = window.setInterval(refreshRealtimeLabels, 30000);
+}
+
+function stopRealtimeUpdates() {
+  if (!realtimeUpdateTimer) return;
+  window.clearInterval(realtimeUpdateTimer);
+  realtimeUpdateTimer = null;
+}
+
+function refreshRealtimeLabels() {
+  document.querySelectorAll("[data-live-updated-at]").forEach((item) => {
+    item.textContent = formatLiveUpdateTime(new Date());
+  });
+  document.querySelectorAll("[data-job-relative-time]").forEach((item) => {
+    item.textContent = `Cập nhật ${formatRelativeTime(item.dataset.jobRelativeTime)}`;
+  });
+}
+
+function formatLiveUpdateTime(date) {
+  return `[Update ${date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })}]`;
+}
+
+function formatNumber(value) {
+  return Number(value).toLocaleString("vi-VN");
+}
+
+function getJobTimestamp(job) {
+  const timestamp = Date.parse(job.updatedAt || job.createdAt || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function formatRelativeTime(dateString) {
+  const timestamp = Date.parse(dateString);
+  if (Number.isNaN(timestamp)) return formatDate(toDateInput(new Date()));
+  return formatDate(dateString);
 }
 
 function toDateInput(date) {
