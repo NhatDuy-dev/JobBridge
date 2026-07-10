@@ -1,0 +1,15 @@
+{
+  "name": "jobbridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JobBridge recruitment SPA with REST API and SQLite database",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
