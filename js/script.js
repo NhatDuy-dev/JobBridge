@@ -3,6 +3,7 @@
   jobs: "jobbridge_spa_jobs",
   applications: "jobbridge_spa_applications",
   cvs: "jobbridge_spa_cvs",
+  reports: "jobbridge_spa_job_reports",
   session: "jobbridge_spa_session",
 };
 
@@ -240,15 +241,20 @@ const seedCvs = [
   },
 ];
 
+const seedJobReports = [];
+
 const appState = {
   users: [],
   jobs: [],
   applications: [],
   cvs: [],
+  reports: [],
   currentUser: null,
   authMode: "login",
   candidateTab: "jobs",
   candidateKeyword: "",
+  candidateSort: "newest",
+  detailJobId: null,
   candidateFilters: {
     location: "",
     types: [],
@@ -268,6 +274,7 @@ let realtimeUpdateTimer = null;
 
 document.addEventListener("DOMContentLoaded", initApp);
 window.addEventListener("storage", handleRealtimeStorageUpdate);
+window.addEventListener("popstate", handleCandidateRouteChange);
 
 function initApp() {
   bootMockDatabase();
@@ -275,12 +282,14 @@ function initApp() {
   appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
   appState.applications = readStorage(STORAGE_KEYS.applications, seedApplications).map(normalizeApplication);
   appState.cvs = readStorage(STORAGE_KEYS.cvs, seedCvs).map(normalizeCv);
+  appState.reports = readStorage(STORAGE_KEYS.reports, seedJobReports);
   syncAppliedJobsFromApplications();
   appState.currentUser = hydrateSessionUser(readStorage(STORAGE_KEYS.session, null));
   writeStorage(STORAGE_KEYS.users, appState.users);
   writeStorage(STORAGE_KEYS.jobs, appState.jobs);
   writeStorage(STORAGE_KEYS.applications, appState.applications);
   writeStorage(STORAGE_KEYS.cvs, appState.cvs);
+  writeStorage(STORAGE_KEYS.reports, appState.reports);
 
   if (appState.currentUser) {
     renderDashboard();
@@ -293,7 +302,7 @@ function handleRealtimeStorageUpdate(event) {
   if (!appState.currentUser || event.key !== STORAGE_KEYS.jobs) return;
 
   appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
-  if (appState.currentUser.role === "candidate") renderCandidateView();
+  if (appState.currentUser.role === "candidate") renderCandidateRoute();
   if (appState.currentUser.role === "employer") renderEmployerView();
   if (appState.currentUser.role === "admin") renderAdminView();
   refreshRealtimeLabels();
@@ -311,6 +320,9 @@ function bootMockDatabase() {
   }
   if (!localStorage.getItem(STORAGE_KEYS.cvs)) {
     localStorage.setItem(STORAGE_KEYS.cvs, JSON.stringify(seedCvs));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.reports)) {
+    localStorage.setItem(STORAGE_KEYS.reports, JSON.stringify(seedJobReports));
   }
 }
 
@@ -738,7 +750,7 @@ function renderDashboard() {
     document.querySelector("#logoutButton").addEventListener("click", logout);
   }
 
-  if (user.role === "candidate") renderCandidateView();
+  if (user.role === "candidate") renderCandidateRoute();
   if (user.role === "employer") renderEmployerView();
   if (user.role === "admin") renderAdminView();
 
@@ -748,7 +760,10 @@ function renderDashboard() {
 function goToDashboardHome() {
   closeJobDetailModal();
   closeApplicationModal();
+  closeJobReportModal();
   if (appState.currentUser.role === "candidate") {
+    if (window.location.pathname !== "/") window.history.pushState({}, "", "/");
+    appState.detailJobId = null;
     appState.candidateTab = "jobs";
     appState.candidateKeyword = "";
     appState.candidateFilters = {
@@ -769,6 +784,26 @@ function goToDashboardHome() {
     renderAdminView();
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function getJobIdFromLocation() {
+  const match = window.location.pathname.match(/^\/jobs\/(\d+)\/?$/);
+  return match ? Number(match[1]) : null;
+}
+
+function renderCandidateRoute() {
+  const jobId = getJobIdFromLocation();
+  appState.detailJobId = jobId;
+  if (jobId) renderCandidateJobDetail(jobId);
+  else renderCandidateView();
+}
+
+function handleCandidateRouteChange() {
+  if (!appState.currentUser || appState.currentUser.role !== "candidate") return;
+  closeApplicationModal();
+  closeJobReportModal();
+  renderCandidateRoute();
+  window.scrollTo({ top: 0 });
 }
 
 function renderSiteNavigation() {
@@ -931,6 +966,7 @@ function logout() {
 }
 
 function renderCandidateView() {
+  document.title = "JobBridge - Tuyển dụng việc làm";
   const currentUser = normalizeUser(appState.currentUser);
   const approvedJobs = getFilteredApprovedJobs();
   const appliedCount = currentUser.appliedJobs.length;
@@ -970,7 +1006,17 @@ function renderCandidateView() {
               <p class="eyebrow">Job Search</p>
               <h2>Tìm việc làm</h2>
             </div>
-            <span class="muted-count">${approvedJobs.length} kết quả</span>
+            <div class="candidate-heading-actions">
+              <span class="muted-count">${approvedJobs.length} kết quả</span>
+              <label class="job-sort-control">
+                <span>Sắp xếp</span>
+                <select id="candidateJobSort">
+                  <option value="newest" ${appState.candidateSort === "newest" ? "selected" : ""}>Mới nhất</option>
+                  <option value="salary" ${appState.candidateSort === "salary" ? "selected" : ""}>Lương cao nhất</option>
+                  <option value="match" ${appState.candidateSort === "match" ? "selected" : ""}>Phù hợp nhất</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           ${recommendedJob ? renderCandidateSpotlight(recommendedJob) : ""}
@@ -1146,14 +1192,13 @@ function renderCareerCategoryRail() {
   const approvedJobCount = appState.jobs.filter((job) => job.status === "Approved").length;
   const marketJobCount = 51610 + approvedJobCount;
   const currentYear = new Date().getFullYear();
-  const updateLabel = formatLiveUpdateTime(new Date());
 
   return `
     <section class="job-market-strip">
       <div class="job-market-heading">
         <div>
-          <strong>Tuyển dụng <span>${formatNumber(marketJobCount)} việc làm</span> <em data-live-updated-at>${updateLabel}</em></strong>
-          <p>Trang chủ <span>/</span> Tuyển dụng ${formatNumber(marketJobCount)} việc làm ${currentYear} <em data-live-updated-at>${updateLabel}</em></p>
+          <strong>Tuyển dụng <span>${formatNumber(marketJobCount)} việc làm</span></strong>
+          <p>Trang chủ <span>/</span> Tuyển dụng ${formatNumber(marketJobCount)} việc làm ${currentYear}</p>
         </div>
         <button class="job-alert-button" data-create-job-alert type="button">Tạo thông báo việc làm</button>
       </div>
@@ -1487,14 +1532,9 @@ function renderAdvancedFilterPanel() {
       </div>
 
       <div class="filter-section">
-        <div class="filter-title-row">
-          <strong>Nghỉ thứ 7</strong>
-          <span>AI ✣</span>
-        </div>
         <div class="filter-radio-grid">
           ${renderFilterRadio("saturdayFilter", "", "Không lọc", appState.candidateFilters.saturday === "")}
           ${renderFilterRadio("saturdayFilter", "work", "Làm thứ 7", appState.candidateFilters.saturday === "work")}
-          ${renderFilterRadio("saturdayFilter", "off", "Nghỉ thứ 7", appState.candidateFilters.saturday === "off")}
           ${renderFilterRadio("saturdayFilter", "unknown", "Tin đăng không đề cập", appState.candidateFilters.saturday === "unknown")}
         </div>
       </div>
@@ -1590,6 +1630,13 @@ function bindCandidateTabs() {
 
 function showCandidateTab(tab) {
   appState.candidateTab = tab;
+  if (appState.detailJobId || getJobIdFromLocation()) {
+    window.history.pushState({}, "", "/");
+    appState.detailJobId = null;
+    renderCandidateView();
+    window.scrollTo({ top: 0 });
+    return;
+  }
   syncCandidateTabButtons();
 }
 
@@ -1606,6 +1653,10 @@ function syncCandidateTabButtons() {
 }
 
 function bindCandidateFilters() {
+  document.querySelector("#candidateJobSort")?.addEventListener("change", (event) => {
+    appState.candidateSort = event.target.value;
+    renderCandidateView();
+  });
   document.querySelector("#jobSearchForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     appState.candidateKeyword = document.querySelector("#jobSearchKeyword").value.trim();
@@ -1739,7 +1790,7 @@ function bindCandidateJobCardActions(root) {
   root.querySelectorAll("[data-view-job]").forEach((button) => {
     if (button.dataset.jobActionBound) return;
     button.dataset.jobActionBound = "true";
-    button.addEventListener("click", () => openJobDetailModal(Number(button.dataset.viewJob)));
+    button.addEventListener("click", () => openJobDetailPage(Number(button.dataset.viewJob)));
   });
 
   root.querySelectorAll("[data-apply-job]").forEach((button) => {
@@ -1785,6 +1836,240 @@ function renderCandidateSpotlight(job) {
       </div>
     </section>
   `;
+}
+
+function openJobDetailPage(jobId) {
+  const job = appState.jobs.find((item) => item.id === jobId && item.status === "Approved");
+  if (!job) return;
+  closeJobDetailModal();
+  if (window.location.pathname !== `/jobs/${jobId}`) window.history.pushState({ jobId }, "", `/jobs/${jobId}`);
+  appState.detailJobId = jobId;
+  renderCandidateJobDetail(jobId);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function navigateToCandidateHome() {
+  if (window.location.pathname !== "/") window.history.pushState({}, "", "/");
+  appState.detailJobId = null;
+  appState.candidateTab = "jobs";
+  renderCandidateView();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function getRelatedJobs(job) {
+  return appState.jobs
+    .filter((item) => item.id !== job.id && item.status === "Approved")
+    .map((item) => ({
+      job: item,
+      score:
+        (item.category === job.category ? 4 : 0) +
+        (item.jobField === job.jobField ? 3 : 0) +
+        (item.location === job.location ? 2 : 0) +
+        (item.type === job.type ? 1 : 0),
+    }))
+    .sort((first, second) => second.score - first.score || getJobTimestamp(second.job) - getJobTimestamp(first.job))
+    .slice(0, 3)
+    .map((item) => item.job);
+}
+
+function renderCandidateJobDetail(jobId) {
+  const root = document.querySelector("#dashboardRoot");
+  const job = appState.jobs.find((item) => item.id === jobId && item.status === "Approved");
+  if (!job) {
+    root.innerHTML = `
+      <section class="job-detail-not-found">
+        <h1>Không tìm thấy việc làm</h1>
+        <p>Tin tuyển dụng có thể đã đóng hoặc không còn tồn tại.</p>
+        <button class="primary-button" data-back-to-jobs type="button">Về trang tìm việc</button>
+      </section>`;
+    root.querySelector("[data-back-to-jobs]").addEventListener("click", navigateToCandidateHome);
+    return;
+  }
+
+  const applied = appState.currentUser.appliedJobs.includes(job.id);
+  const saved = appState.currentUser.savedJobs.includes(job.id);
+  const matchScore = getAiMatchScore(job.id);
+  const relatedJobs = getRelatedJobs(job);
+  const reported = appState.reports.some(
+    (report) => report.jobId === job.id && report.candidateId === appState.currentUser.id,
+  );
+
+  document.title = `${job.title} - ${job.company} | JobBridge`;
+  root.innerHTML = `
+    <nav class="job-detail-breadcrumb" aria-label="Breadcrumb">
+      <button data-back-to-jobs type="button">Việc làm</button>
+      <span>/</span>
+      <span>${escapeHtml(job.title)}</span>
+    </nav>
+
+    <section class="job-detail-page">
+      <article class="job-detail-main">
+        <header class="job-detail-hero">
+          <span class="company-logo large">${escapeHtml(getInitials(job.company))}</span>
+          <div class="job-detail-hero-copy">
+            <p>${escapeHtml(job.company)}</p>
+            <h1>${escapeHtml(job.title)}</h1>
+            <div class="job-detail-tags">
+              <span>${escapeHtml(job.salary)}</span>
+              <span>${escapeHtml(job.location)}</span>
+              <span>${escapeHtml(job.type)}</span>
+            </div>
+          </div>
+          <div class="job-detail-primary-actions">
+            <button class="${applied ? "secondary-button" : "primary-button"}" data-apply-job="${job.id}" type="button">${applied ? "Đã ứng tuyển" : "Ứng tuyển ngay"}</button>
+            <button class="secondary-button" data-save-job="${job.id}" type="button">${saved ? "Bỏ lưu" : "Lưu việc"}</button>
+          </div>
+        </header>
+
+        <section class="job-detail-content-card">
+          <h2>Mô tả công việc</h2>
+          <p>${escapeHtml(job.description)}</p>
+        </section>
+
+        <section class="job-detail-content-card">
+          <h2>Thông tin chung</h2>
+          <dl class="job-detail-facts">
+            <div><dt>Kinh nghiệm</dt><dd>${escapeHtml(job.experience || "Không yêu cầu")}</dd></div>
+            <div><dt>Ngành nghề</dt><dd>${escapeHtml(job.jobField || job.category || "Khác")}</dd></div>
+            <div><dt>Lĩnh vực công ty</dt><dd>${escapeHtml(job.companyField || "Chưa cập nhật")}</dd></div>
+            <div><dt>Hình thức</dt><dd>${escapeHtml(job.type)}</dd></div>
+          </dl>
+        </section>
+
+        <section class="job-detail-content-card job-detail-match-card">
+          <div><strong>${matchScore}%</strong><span>phù hợp với bạn</span></div>
+          <ul>${getMatchReasons(job).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+        </section>
+      </article>
+
+      <aside class="job-detail-sidebar">
+        <section class="job-detail-side-card">
+          <h2>Thao tác</h2>
+          <button data-share-job="${job.id}" type="button">Chia sẻ việc làm</button>
+          <button class="report-job-button ${reported ? "reported" : ""}" data-report-job="${job.id}" type="button">${reported ? "Đã báo cáo tin này" : "Báo cáo tin sai hoặc lừa đảo"}</button>
+        </section>
+        <section class="job-detail-side-card">
+          <h2>Về công ty</h2>
+          <strong>${escapeHtml(job.company)}</strong>
+          <p>${escapeHtml(job.companyField || "Nhà tuyển dụng trên JobBridge")}</p>
+          <span>${escapeHtml(job.location)}</span>
+        </section>
+      </aside>
+    </section>
+
+    <section class="related-jobs-section">
+      <div class="related-jobs-heading">
+        <div><p class="eyebrow">Có thể bạn quan tâm</p><h2>Việc làm liên quan</h2></div>
+        <button data-back-to-jobs type="button">Xem tất cả việc làm</button>
+      </div>
+      <div class="related-job-grid">
+        ${relatedJobs.length ? relatedJobs.map(renderRelatedJobCard).join("") : `<div class="empty-state compact-empty">Chưa có việc làm liên quan.</div>`}
+      </div>
+    </section>
+  `;
+
+  root.querySelectorAll("[data-back-to-jobs]").forEach((button) => button.addEventListener("click", navigateToCandidateHome));
+  root.querySelector("[data-share-job]").addEventListener("click", () => shareJob(job));
+  root.querySelector("[data-report-job]").addEventListener("click", () => openJobReportModal(job.id));
+  bindCandidateJobCardActions(root);
+}
+
+function renderRelatedJobCard(job) {
+  return `
+    <article class="related-job-card">
+      <div><span class="company-logo">${escapeHtml(getInitials(job.company))}</span><div><h3>${escapeHtml(job.title)}</h3><p>${escapeHtml(job.company)}</p></div></div>
+      <div class="job-meta"><span>${escapeHtml(job.salary)}</span><span>${escapeHtml(job.location)}</span></div>
+      <button class="ghost-button" data-view-job="${job.id}" type="button">Xem chi tiết</button>
+    </article>
+  `;
+}
+
+async function shareJob(job) {
+  const url = `${window.location.origin}/jobs/${job.id}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `${job.title} - ${job.company}`, text: `Xem việc làm ${job.title} tại ${job.company}`, url });
+    } else if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      showToast("Đã sao chép liên kết việc làm", "success");
+    } else {
+      const input = document.createElement("textarea");
+      input.value = url;
+      document.body.append(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+      showToast("Đã sao chép liên kết việc làm", "success");
+    }
+  } catch (error) {
+    if (error?.name !== "AbortError") showToast("Không thể chia sẻ việc làm lúc này.", "error");
+  }
+}
+
+function openJobReportModal(jobId) {
+  const job = appState.jobs.find((item) => item.id === jobId);
+  if (!job) return;
+  closeJobReportModal();
+  document.body.classList.add("modal-open");
+  document.body.insertAdjacentHTML("beforeend", `
+    <div id="jobReportModal" class="modal-backdrop" role="presentation">
+      <section class="job-report-modal" role="dialog" aria-modal="true" aria-labelledby="jobReportTitle">
+        <button class="modal-close" data-close-job-report type="button" aria-label="Đóng báo cáo">&times;</button>
+        <div><p class="eyebrow">Báo cáo tin tuyển dụng</p><h2 id="jobReportTitle">${escapeHtml(job.title)}</h2><p>${escapeHtml(job.company)}</p></div>
+        <form id="jobReportForm">
+          <label>Lý do báo cáo
+            <select id="jobReportReason" required>
+              <option value="">Chọn lý do</option>
+              <option value="incorrect">Nội dung sai sự thật</option>
+              <option value="scam">Có dấu hiệu lừa đảo</option>
+              <option value="impersonation">Giả mạo công ty</option>
+              <option value="fee">Yêu cầu ứng viên nộp phí</option>
+              <option value="other">Lý do khác</option>
+            </select>
+          </label>
+          <label>Thông tin bổ sung
+            <textarea id="jobReportDetails" maxlength="1000" rows="5" placeholder="Mô tả chi tiết để JobBridge có thể kiểm tra..."></textarea>
+          </label>
+          <div id="jobReportMessage" class="auth-message" aria-live="polite"></div>
+          <div class="modal-actions"><button class="ghost-button" data-close-job-report type="button">Huỷ</button><button class="danger-button" type="submit">Gửi báo cáo</button></div>
+        </form>
+      </section>
+    </div>`);
+
+  const modal = document.querySelector("#jobReportModal");
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal || event.target.closest("[data-close-job-report]")) closeJobReportModal();
+  });
+  modal.querySelector("#jobReportForm").addEventListener("submit", (event) => submitJobReport(event, job));
+  document.addEventListener("keydown", handleJobReportEscape);
+  modal.querySelector("#jobReportReason").focus();
+}
+
+function submitJobReport(event, job) {
+  event.preventDefault();
+  const reason = document.querySelector("#jobReportReason").value;
+  const details = document.querySelector("#jobReportDetails").value.trim();
+  if (!reason) {
+    showInlineMessage("#jobReportMessage", "Vui lòng chọn lý do báo cáo.", "error");
+    return;
+  }
+  const previous = appState.reports.find((report) => report.jobId === job.id && report.candidateId === appState.currentUser.id);
+  const report = { id: previous?.id || Date.now(), jobId: job.id, candidateId: appState.currentUser.id, reason, details, status: "pending", reportedAt: new Date().toISOString() };
+  appState.reports = [report, ...appState.reports.filter((item) => item.id !== report.id)];
+  writeStorage(STORAGE_KEYS.reports, appState.reports);
+  closeJobReportModal();
+  renderCandidateJobDetail(job.id);
+  showToast("Đã gửi báo cáo để JobBridge kiểm tra", "success");
+}
+
+function closeJobReportModal() {
+  document.querySelector("#jobReportModal")?.remove();
+  if (!document.querySelector("#applicationModal") && !document.querySelector("#jobDetailModal")) document.body.classList.remove("modal-open");
+  document.removeEventListener("keydown", handleJobReportEscape);
+}
+
+function handleJobReportEscape(event) {
+  if (event.key === "Escape") closeJobReportModal();
 }
 
 function openJobDetailModal(jobId) {
@@ -1901,8 +2186,7 @@ function getFilteredApprovedJobs() {
   const keyword = appState.candidateKeyword.trim().toLowerCase();
   const { location, types, minSalary, saturday, categories, experiences, companyField, jobField } = appState.candidateFilters;
 
-  return appState.jobs
-    .filter((job) => {
+  const jobs = appState.jobs.filter((job) => {
       const searchable = `${job.title} ${job.company} ${job.location} ${job.salary} ${job.description} ${job.category} ${job.experience}`.toLowerCase();
       const matchKeyword = !keyword || searchable.includes(keyword);
       const matchLocation = !location || job.location === location;
@@ -1914,8 +2198,15 @@ function getFilteredApprovedJobs() {
       const matchCompanyField = !companyField || job.companyField === companyField;
       const matchJobField = !jobField || job.jobField === jobField;
       return job.status === "Approved" && matchKeyword && matchLocation && matchType && matchSalary && matchSaturday && matchCategory && matchExperience && matchCompanyField && matchJobField;
-    })
-    .sort((first, second) => getJobTimestamp(second) - getJobTimestamp(first));
+    });
+
+  if (appState.candidateSort === "salary") {
+    return jobs.sort((first, second) => second.maxSalary - first.maxSalary || second.minSalary - first.minSalary);
+  }
+  if (appState.candidateSort === "match") {
+    return jobs.sort((first, second) => getAiMatchScore(second.id) - getAiMatchScore(first.id));
+  }
+  return jobs.sort((first, second) => getJobTimestamp(second) - getJobTimestamp(first));
 }
 
 function applyJob(jobId) {
@@ -2131,7 +2422,8 @@ function submitApplication(event, jobId) {
   );
   writeStorage(STORAGE_KEYS.applications, appState.applications);
   closeApplicationModal();
-  renderCandidateView();
+  if (appState.detailJobId) renderCandidateJobDetail(appState.detailJobId);
+  else renderCandidateView();
   showToast("Ứng tuyển thành công", "success");
 }
 
@@ -2153,7 +2445,8 @@ function toggleSavedJob(jobId) {
 
   updateCurrentUser({ savedJobs });
   closeJobDetailModal();
-  renderCandidateView();
+  if (appState.detailJobId) renderCandidateJobDetail(appState.detailJobId);
+  else renderCandidateView();
   showToast(isSaved ? "Da bo luu viec lam" : "Da luu thanh cong", isSaved ? "info" : "success");
 }
 
@@ -2656,20 +2949,9 @@ function stopRealtimeUpdates() {
 }
 
 function refreshRealtimeLabels() {
-  document.querySelectorAll("[data-live-updated-at]").forEach((item) => {
-    item.textContent = formatLiveUpdateTime(new Date());
-  });
   document.querySelectorAll("[data-job-relative-time]").forEach((item) => {
     item.textContent = `Cập nhật ${formatRelativeTime(item.dataset.jobRelativeTime)}`;
   });
-}
-
-function formatLiveUpdateTime(date) {
-  return `[Update ${date.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })}]`;
 }
 
 function formatNumber(value) {
