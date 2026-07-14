@@ -740,6 +740,7 @@ function renderDashboard() {
       ${renderTopbarUserArea(user)}
     </header>
     <main id="dashboardRoot" class="spa-dashboard"></main>
+    ${renderSiteFooter(user)}
   `;
 
   document.querySelector("#homeLogoButton").addEventListener("click", goToDashboardHome);
@@ -753,6 +754,8 @@ function renderDashboard() {
   if (user.role === "candidate") renderCandidateRoute();
   if (user.role === "employer") renderEmployerView();
   if (user.role === "admin") renderAdminView();
+
+  bindSiteFooter();
 
   startRealtimeUpdates();
 }
@@ -831,6 +834,92 @@ function renderSiteNavigation() {
 
 function renderBrandLogo() {
   return `<img class="brand-logo" src="../assets/jobbridge-logo.png" alt="JobBridge" />`;
+}
+
+function renderSiteFooter(user) {
+  const year = new Date().getFullYear();
+  return `
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <section class="site-footer-brand" aria-label="Giới thiệu JobBridge">
+          <button class="site-footer-logo" data-footer-home type="button" aria-label="Về trang chủ JobBridge">
+            ${renderBrandLogo()}
+          </button>
+          <p>Kết nối ứng viên phù hợp với nhà tuyển dụng uy tín bằng một quy trình tìm việc rõ ràng, thuận tiện và an toàn.</p>
+          <div class="site-footer-promise">
+            <span>Đúng người</span>
+            <span>Đúng việc</span>
+            <span>Đúng thời điểm</span>
+          </div>
+        </section>
+
+        <nav class="site-footer-column" aria-label="Dành cho ứng viên">
+          <h2>Dành cho ứng viên</h2>
+          <button data-footer-candidate-tab="jobs" type="button">Tìm việc làm</button>
+          <button data-footer-candidate-tab="profile" type="button">Hồ sơ và CV</button>
+          <button data-footer-candidate-tab="saved" type="button">Việc làm đã lưu</button>
+          <button data-footer-candidate-tab="history" type="button">Lịch sử ứng tuyển</button>
+        </nav>
+
+        <nav class="site-footer-column" aria-label="Dành cho nhà tuyển dụng">
+          <h2>Dành cho nhà tuyển dụng</h2>
+          <button data-footer-employer-tab="post" type="button">Đăng tin tuyển dụng</button>
+          <button data-footer-employer-tab="kanban" type="button">Quản lý ứng viên</button>
+          <button data-footer-notice type="button">Giải pháp tuyển dụng</button>
+          <button data-footer-notice type="button">Cẩm nang tuyển dụng</button>
+        </nav>
+
+        <section class="site-footer-column site-footer-support">
+          <h2>Hỗ trợ JobBridge</h2>
+          <a href="mailto:support@jobbridge.vn">support@jobbridge.vn</a>
+          <p>Thứ 2 - Thứ 6<br />08:00 - 17:30</p>
+          <p>TP. Hồ Chí Minh, Việt Nam</p>
+          <span class="site-footer-account">Bạn đang dùng tài khoản ${user.role === "candidate" ? "ứng viên" : user.role === "employer" ? "nhà tuyển dụng" : "quản trị viên"}</span>
+        </section>
+      </div>
+
+      <div class="site-footer-bottom">
+        <p>&copy; ${year} JobBridge. Nền tảng tuyển dụng và ứng tuyển việc làm.</p>
+        <div>
+          <button data-footer-notice type="button">Điều khoản sử dụng</button>
+          <button data-footer-notice type="button">Chính sách bảo mật</button>
+        </div>
+      </div>
+    </footer>
+  `;
+}
+
+function bindSiteFooter() {
+  document.querySelectorAll("[data-footer-home]").forEach((button) => {
+    button.addEventListener("click", goToDashboardHome);
+  });
+
+  document.querySelectorAll("[data-footer-candidate-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (appState.currentUser.role !== "candidate") {
+        showToast("Vui lòng sử dụng tài khoản ứng viên để mở mục này.", "error");
+        return;
+      }
+      showCandidateTab(button.dataset.footerCandidateTab);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+
+  document.querySelectorAll("[data-footer-employer-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (appState.currentUser.role !== "employer") {
+        showToast("Vui lòng sử dụng tài khoản nhà tuyển dụng để mở mục này.", "error");
+        return;
+      }
+      appState.employerTab = button.dataset.footerEmployerTab;
+      renderEmployerView();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+
+  document.querySelectorAll("[data-footer-notice]").forEach((button) => {
+    button.addEventListener("click", () => showToast("Nội dung này đang được JobBridge cập nhật."));
+  });
 }
 
 function renderTopbarUserArea(user) {
@@ -1542,7 +1631,7 @@ function renderAdvancedFilterPanel() {
       <div class="filter-section">
         <h4>Theo danh mục nghề</h4>
         <div class="filter-list">
-          ${jobCategories.map((category) => renderFilterCheckbox("category", category.value, `${escapeHtml(category.label)} <small>(${category.count})</small>`, appState.candidateFilters.categories.includes(category.value), true)).join("")}
+          ${jobCategories.map((category) => renderFilterCheckbox("category", category.value, `${escapeHtml(category.label)} <small>(${category.count})</small>`, appState.candidateFilters.categories.includes(category.value))).join("")}
         </div>
         <button class="filter-more" type="button">Xem thêm</button>
       </div>
@@ -1550,7 +1639,7 @@ function renderAdvancedFilterPanel() {
       <div class="filter-section">
         <h4>Kinh nghiệm</h4>
         <div class="filter-check-grid">
-          ${experienceOptions.map((experience) => renderFilterCheckbox("experience", experience.value, escapeHtml(experience.label), appState.candidateFilters.experiences.includes(experience.value), false)).join("")}
+          ${experienceOptions.map((experience) => renderFilterCheckbox("experience", experience.value, escapeHtml(experience.label), appState.candidateFilters.experiences.includes(experience.value))).join("")}
         </div>
       </div>
 
@@ -1598,12 +1687,11 @@ function renderFilterRadio(name, value, label, checked) {
   `;
 }
 
-function renderFilterCheckbox(type, value, label, checked, hasChevron) {
+function renderFilterCheckbox(type, value, label, checked) {
   return `
     <label class="filter-check-option">
       <input data-filter-${type}="${escapeHtml(value)}" type="checkbox" value="${escapeHtml(value)}" ${checked ? "checked" : ""} />
       <span>${label}</span>
-      ${hasChevron ? '<b class="filter-chevron"></b>' : ""}
     </label>
   `;
 }
