@@ -114,6 +114,23 @@ async function api(req, res, url) {
     if (!job || (job.status !== "Approved" && userByToken(req)?.role !== "admin")) return fail(res, 404, "Không tìm thấy việc làm", "NOT_FOUND");
     return json(res, 200, { job: mapJob(job) });
   }
+  params = route("/api/jobs/:id/reports", pathname);
+  if (req.method === "POST" && params) {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const job = db.prepare("SELECT id FROM jobs WHERE id=? AND status='Approved'").get(Number(params.id));
+    if (!job) return fail(res, 404, "Không tìm thấy việc làm", "NOT_FOUND");
+    const d = await body(req);
+    const reason = String(d.reason || "");
+    const details = String(d.details || "").trim();
+    if (!["incorrect", "scam", "impersonation", "fee", "other"].includes(reason) || details.length > 1000) {
+      return fail(res, 422, "Nội dung báo cáo không hợp lệ", "VALIDATION_ERROR");
+    }
+    db.prepare(`INSERT INTO job_reports(candidate_id,job_id,reason,details) VALUES(?,?,?,?)
+      ON CONFLICT(candidate_id,job_id) DO UPDATE SET reason=excluded.reason,details=excluded.details,status='pending',updated_at=datetime('now')`)
+      .run(user.id, job.id, reason, details);
+    const report = db.prepare("SELECT id,candidate_id,job_id,reason,details,status,reported_at,updated_at FROM job_reports WHERE candidate_id=? AND job_id=?").get(user.id, job.id);
+    return json(res, 201, { report });
+  }
   if (req.method === "POST" && pathname === "/api/jobs") {
     const user = requireUser(req, res, ["employer", "admin"]); if (!user) return;
     const d = await body(req);
@@ -264,7 +281,7 @@ async function api(req, res, url) {
 }
 
 function staticFile(req, res, pathname) {
-  const aliases = pathname === "/" ? "/html/index.html" : pathname;
+  const aliases = pathname === "/" || /^\/jobs\/\d+\/?$/.test(pathname) ? "/html/index.html" : pathname;
   const file = path.resolve(root, `.${aliases}`);
   if (!file.startsWith(root) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return fail(res, 404, "Không tìm thấy tài nguyên", "NOT_FOUND");
   const type = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png" }[path.extname(file)] || "application/octet-stream";

@@ -86,6 +86,18 @@ CREATE TABLE IF NOT EXISTS saved_jobs (
   PRIMARY KEY (user_id, job_id)
 );
 
+CREATE TABLE IF NOT EXISTS job_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL CHECK (reason IN ('incorrect', 'scam', 'impersonation', 'fee', 'other')),
+  details TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved')),
+  reported_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(candidate_id, job_id)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -100,4 +112,5 @@ CREATE INDEX IF NOT EXISTS idx_jobs_employer ON jobs(employer_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id, applied_at DESC);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id, applied_at DESC);
 CREATE INDEX IF NOT EXISTS idx_cvs_candidate ON cvs(candidate_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_reports_status ON job_reports(status, reported_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
