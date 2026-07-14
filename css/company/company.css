@@ -1,0 +1,4 @@
+/* Hoàng phát triển giao diện employer trong file này. */
+body[data-role="employer"] .company-workspace {
+  border-top: 4px solid #2563eb;
+}
