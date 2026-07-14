@@ -1,0 +1,4 @@
+/* Thiện phát triển giao diện admin trong file này. */
+body[data-role="admin"] .admin-workspace {
+  border-top: 4px solid #7c3aed;
+}
