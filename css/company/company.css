@@ -1,4 +1,5 @@
-/* Hoàng phát triển giao diện employer trong file này. */
-body[data-role="employer"] .company-workspace {
-  border-top: 4px solid #2563eb;
-}
+@import url("./company-layout.css");
+@import url("./company-components.css");
+@import url("./company-jobs.css");
+@import url("./company-applications.css");
+@import url("./company-responsive.css");

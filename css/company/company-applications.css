@@ -1,0 +1,25 @@
+.company-pipeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.company-pipeline-step { display: flex; min-height: 70px; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--company-line); border-left: 4px solid #9aa8b4; border-radius: 7px; padding: 12px 16px; color: #526275; background: #fff; text-align: left; }
+.company-pipeline-step:nth-child(2) { border-left-color: var(--company-amber); }
+.company-pipeline-step:nth-child(3) { border-left-color: var(--company-green); }
+.company-pipeline-step:nth-child(4) { border-left-color: var(--company-red); }
+.company-pipeline-step:hover,
+.company-pipeline-step.active { border-color: var(--company-teal); background: #f1faf8; }
+.company-pipeline-step span { font-size: 12px; font-weight: 800; }
+.company-pipeline-step strong { color: var(--company-navy); font-size: 23px; }
+.company-application-detail { display: grid; gap: 18px; padding: 22px; }
+.company-candidate-summary { display: flex; align-items: center; gap: 16px; border: 1px solid #cde5e1; border-radius: 8px; padding: 18px; background: #f2faf9; }
+.company-candidate-summary h3 { margin: 0 0 4px; color: var(--company-navy); font-size: 18px; }
+.company-candidate-summary p { margin: 0; color: var(--company-muted); font-size: 12px; }
+.company-contact-list { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 10px; color: #42576a; font-size: 11px; }
+.company-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.company-detail-section,
+.company-cover-letter { border: 1px solid var(--company-line); border-radius: 8px; padding: 16px; }
+.company-detail-section h3,
+.company-cover-letter h3 { margin-bottom: 13px; color: var(--company-navy); font-size: 13px; }
+.company-detail-section dl { display: grid; gap: 11px; margin: 0; }
+.company-detail-section dl div { display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 10px; }
+.company-detail-section dt { color: var(--company-muted); font-size: 11px; }
+.company-detail-section dd { margin: 0; color: #2e4154; font-size: 11px; font-weight: 700; }
+.company-cover-letter p { margin: 0; color: #536577; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.company-status-form { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: end; gap: 14px; border-top: 1px solid var(--company-line); padding-top: 18px; }
