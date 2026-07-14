@@ -5,7 +5,7 @@ function renderCompanyView() {
   root.innerHTML = `
     <section class="role-workspace company-workspace">
       <p class="eyebrow">Nhà tuyển dụng</p>
-      <h1>Khu vực công ty</h1>
+      <h1>Khu vực công ty.</h1>
       <p>Module company đã sẵn sàng để phát triển độc lập trong <code>js/company</code> và <code>css/company</code>.</p>
     </section>
   `;
