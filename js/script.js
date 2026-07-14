@@ -2,8 +2,13 @@
   users: "jobbridge_spa_users",
   jobs: "jobbridge_spa_jobs",
   applications: "jobbridge_spa_applications",
+  cvs: "jobbridge_spa_cvs",
   session: "jobbridge_spa_session",
 };
+
+const CV_FILE_DATABASE = "jobbridge_cv_files";
+const CV_FILE_STORE = "cvFiles";
+const MAX_CV_FILE_SIZE = 5 * 1024 * 1024;
 
 const seedUsers = [
   {
@@ -192,6 +197,9 @@ const seedApplications = [
     company: "BridgeTech",
     status: "Da nop",
     appliedAt: "2026-07-01",
+    cvId: 501,
+    cvName: "CV Frontend Developer",
+    coverLetter: "Tôi mong muốn được ứng tuyển vị trí Frontend Developer và đóng góp kinh nghiệm xây dựng giao diện web.",
   },
   {
     id: 1002,
@@ -202,6 +210,9 @@ const seedApplications = [
     company: "Nova Studio",
     status: "Len lich phong van",
     appliedAt: "2026-07-03",
+    cvId: 501,
+    cvName: "CV Frontend Developer",
+    coverLetter: "Tôi quan tâm đến cơ hội thiết kế sản phẩm tại Nova Studio.",
   },
   {
     id: 1003,
@@ -212,6 +223,20 @@ const seedApplications = [
     company: "FinSight",
     status: "Tu choi",
     appliedAt: "2026-07-05",
+    cvId: 501,
+    cvName: "CV Frontend Developer",
+    coverLetter: "Tôi mong muốn phát triển thêm kỹ năng phân tích dữ liệu.",
+  },
+];
+
+const seedCvs = [
+  {
+    id: 501,
+    candidateId: 1,
+    name: "CV Frontend Developer",
+    source: "profile",
+    createdAt: "2026-06-28",
+    updatedAt: "2026-06-28",
   },
 ];
 
@@ -219,6 +244,7 @@ const appState = {
   users: [],
   jobs: [],
   applications: [],
+  cvs: [],
   currentUser: null,
   authMode: "login",
   candidateTab: "jobs",
@@ -247,12 +273,14 @@ function initApp() {
   bootMockDatabase();
   appState.users = readStorage(STORAGE_KEYS.users, seedUsers).map(normalizeUser);
   appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
-  appState.applications = readStorage(STORAGE_KEYS.applications, seedApplications);
+  appState.applications = readStorage(STORAGE_KEYS.applications, seedApplications).map(normalizeApplication);
+  appState.cvs = readStorage(STORAGE_KEYS.cvs, seedCvs).map(normalizeCv);
   syncAppliedJobsFromApplications();
   appState.currentUser = hydrateSessionUser(readStorage(STORAGE_KEYS.session, null));
   writeStorage(STORAGE_KEYS.users, appState.users);
   writeStorage(STORAGE_KEYS.jobs, appState.jobs);
   writeStorage(STORAGE_KEYS.applications, appState.applications);
+  writeStorage(STORAGE_KEYS.cvs, appState.cvs);
 
   if (appState.currentUser) {
     renderDashboard();
@@ -280,6 +308,9 @@ function bootMockDatabase() {
   }
   if (!localStorage.getItem(STORAGE_KEYS.applications)) {
     localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify(seedApplications));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.cvs)) {
+    localStorage.setItem(STORAGE_KEYS.cvs, JSON.stringify(seedCvs));
   }
 }
 
@@ -312,6 +343,35 @@ function normalizeUser(user) {
     skills: Array.isArray(user.skills) ? user.skills : [],
     savedJobs: Array.isArray(user.savedJobs) ? user.savedJobs : [],
     appliedJobs: Array.isArray(user.appliedJobs) ? user.appliedJobs : [],
+  };
+}
+
+function normalizeCv(cv) {
+  const timestamp = cv.updatedAt || cv.createdAt || new Date().toISOString();
+  return {
+    ...cv,
+    id: Number(cv.id),
+    candidateId: Number(cv.candidateId),
+    name: String(cv.name || "CV chưa đặt tên"),
+    source: cv.source === "upload" ? "upload" : "profile",
+    originalFileName: String(cv.originalFileName || ""),
+    fileSize: Number(cv.fileSize || 0),
+    mimeType: String(cv.mimeType || ""),
+    createdAt: cv.createdAt || timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function normalizeApplication(application) {
+  return {
+    ...application,
+    id: Number(application.id),
+    candidateId: Number(application.candidateId),
+    jobId: Number(application.jobId),
+    coverLetter: String(application.coverLetter || ""),
+    cvId: application.cvId ? Number(application.cvId) : null,
+    cvName: String(application.cvName || "CV không xác định"),
+    withdrawnAt: application.withdrawnAt || null,
   };
 }
 
@@ -410,11 +470,11 @@ function syncAppliedJobsFromApplications() {
   appState.users = appState.users.map((user) => {
     if (user.role !== "candidate") return user;
     const appliedFromApplications = appState.applications
-      .filter((application) => application.candidateId === user.id)
+      .filter((application) => application.candidateId === user.id && !application.withdrawnAt)
       .map((application) => application.jobId);
     return {
       ...user,
-      appliedJobs: Array.from(new Set([...(user.appliedJobs || []), ...appliedFromApplications])),
+      appliedJobs: Array.from(new Set(appliedFromApplications)),
     };
   });
 }
@@ -658,22 +718,19 @@ function isValidEmail(email) {
 
 function renderDashboard() {
   const user = appState.currentUser;
-  const roleLabel = getRoleLabel(user.role);
 
   app.innerHTML = `
     <header class="spa-topbar">
-      <div class="spa-brand">
+      <button id="homeLogoButton" class="spa-brand brand-home-button" type="button" aria-label="Về trang chủ">
         ${renderBrandLogo()}
-        <div>
-          <strong>JobBridge</strong>
-          <span>${roleLabel}</span>
-        </div>
-      </div>
+      </button>
       ${renderSiteNavigation()}
       ${renderTopbarUserArea(user)}
     </header>
     <main id="dashboardRoot" class="spa-dashboard"></main>
   `;
+
+  document.querySelector("#homeLogoButton").addEventListener("click", goToDashboardHome);
 
   if (user.role === "candidate") {
     bindCandidateAccountMenu();
@@ -686,6 +743,32 @@ function renderDashboard() {
   if (user.role === "admin") renderAdminView();
 
   startRealtimeUpdates();
+}
+
+function goToDashboardHome() {
+  closeJobDetailModal();
+  closeApplicationModal();
+  if (appState.currentUser.role === "candidate") {
+    appState.candidateTab = "jobs";
+    appState.candidateKeyword = "";
+    appState.candidateFilters = {
+      location: "",
+      types: [],
+      minSalary: 0,
+      saturday: "",
+      categories: [],
+      experiences: [],
+      companyField: "",
+      jobField: "",
+    };
+    renderCandidateView();
+  } else if (appState.currentUser.role === "employer") {
+    appState.employerTab = "post";
+    renderEmployerView();
+  } else {
+    renderAdminView();
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function renderSiteNavigation() {
@@ -998,6 +1081,28 @@ function renderCandidateView() {
                 ${currentUser.skills.map((skill) => renderSkillTag(skill)).join("")}
               </div>
             </div>
+
+            <section class="profile-form-section candidate-cv-manager">
+              <div class="profile-section-heading">
+                <h3>CV của tôi</h3>
+                <span>Tạo CV online từ thông tin hồ sơ đã cập nhật</span>
+              </div>
+              <div class="cv-manager-create">
+                <label>
+                  Tên CV
+                  <input id="onlineCvName" type="text" placeholder="VD: CV Frontend Developer" />
+                </label>
+                <button id="createCvFromProfile" class="secondary-button" type="button">Tạo CV từ hồ sơ</button>
+              </div>
+              <div class="cv-upload-row">
+                <label class="cv-upload-button" for="candidateCvUpload">Nhập CV từ máy</label>
+                <input id="candidateCvUpload" type="file" accept="application/pdf,.pdf" hidden />
+                <span>Chỉ nhận tệp PDF, dung lượng tối đa 5 MB.</span>
+              </div>
+              <div class="cv-manager-list">
+                ${renderCandidateCvList(currentUser.id)}
+              </div>
+            </section>
             <button class="primary-button" type="submit">Cập nhật hồ sơ</button>
           </form>
         </section>
@@ -1132,6 +1237,207 @@ function getCandidateProfileCompletion(user) {
   ];
 
   return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+}
+
+function getCandidateCvs(candidateId = appState.currentUser?.id) {
+  return appState.cvs
+    .filter((cv) => cv.candidateId === candidateId)
+    .sort((first, second) => Date.parse(second.updatedAt) - Date.parse(first.updatedAt));
+}
+
+function renderCandidateCvList(candidateId) {
+  const cvs = getCandidateCvs(candidateId);
+  if (cvs.length === 0) {
+    return `<div class="empty-state compact-empty">Bạn chưa có CV. Hãy tạo CV online từ hồ sơ để bắt đầu ứng tuyển.</div>`;
+  }
+
+  return cvs
+    .map(
+      (cv) => `
+        <article class="cv-manager-card">
+          <span class="cv-file-icon">CV</span>
+          <div class="cv-manager-card-main">
+            <strong>${escapeHtml(cv.name)}</strong>
+            <small>${cv.source === "profile" ? "Tạo online từ hồ sơ" : `PDF tải lên${cv.fileSize ? ` • ${formatFileSize(cv.fileSize)}` : ""}`} • Cập nhật ${formatDate(cv.updatedAt)}</small>
+          </div>
+          <footer class="cv-manager-card-actions">
+            ${cv.source === "upload" ? `<button class="cv-view-button" data-view-cv="${cv.id}" type="button">Xem PDF</button>` : ""}
+            <button class="cv-delete-button" data-delete-cv="${cv.id}" type="button" aria-label="Xoá ${escapeHtml(cv.name)}">Xoá</button>
+          </footer>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function createCvFromProfile(customName = "") {
+  const user = normalizeUser(appState.currentUser);
+  const name = customName.trim() || `CV ${user.desiredTitle || user.name}`;
+  const now = new Date().toISOString();
+  const cv = normalizeCv({
+    id: Date.now(),
+    candidateId: user.id,
+    name,
+    source: "profile",
+    createdAt: now,
+    updatedAt: now,
+    profileSnapshot: {
+      name: user.name,
+      desiredTitle: user.desiredTitle,
+      phone: user.phone,
+      email: user.email,
+      location: user.location,
+      education: user.education,
+      experienceLevel: user.experienceLevel,
+      summary: user.summary,
+      skills: [...user.skills],
+    },
+  });
+  appState.cvs.unshift(cv);
+  writeStorage(STORAGE_KEYS.cvs, appState.cvs);
+  return cv;
+}
+
+function openCvFileDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CV_FILE_DATABASE, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(CV_FILE_STORE)) {
+        request.result.createObjectStore(CV_FILE_STORE, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Không thể mở kho lưu CV."));
+  });
+}
+
+async function saveCvFile(cvId, file) {
+  const database = await openCvFileDatabase();
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction(CV_FILE_STORE, "readwrite");
+    transaction.objectStore(CV_FILE_STORE).put({ id: cvId, file });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Không thể lưu tệp CV."));
+  });
+  database.close();
+}
+
+async function readCvFile(cvId) {
+  const database = await openCvFileDatabase();
+  const record = await new Promise((resolve, reject) => {
+    const request = database.transaction(CV_FILE_STORE, "readonly").objectStore(CV_FILE_STORE).get(cvId);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Không thể đọc tệp CV."));
+  });
+  database.close();
+  return record?.file || null;
+}
+
+async function removeCvFile(cvId) {
+  const database = await openCvFileDatabase();
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction(CV_FILE_STORE, "readwrite");
+    transaction.objectStore(CV_FILE_STORE).delete(cvId);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Không thể xoá tệp CV."));
+  });
+  database.close();
+}
+
+async function uploadCvFromComputer(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const isPdfName = file.name.toLowerCase().endsWith(".pdf");
+  if ((!isPdfName && file.type !== "application/pdf") || file.size === 0) {
+    input.value = "";
+    showToast("Vui lòng chọn một tệp PDF hợp lệ.", "error");
+    return;
+  }
+  if (file.size > MAX_CV_FILE_SIZE) {
+    input.value = "";
+    showToast("Tệp PDF không được vượt quá 5 MB.", "error");
+    return;
+  }
+
+  const headerBytes = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+  const hasPdfSignature = String.fromCharCode(...headerBytes) === "%PDF-";
+  if (!hasPdfSignature) {
+    input.value = "";
+    showToast("Tệp đã chọn không phải là PDF hợp lệ.", "error");
+    return;
+  }
+
+  const customName = document.querySelector("#onlineCvName")?.value.trim();
+  const now = new Date().toISOString();
+  const cv = normalizeCv({
+    id: Date.now(),
+    candidateId: appState.currentUser.id,
+    name: customName || file.name.replace(/\.pdf$/i, ""),
+    source: "upload",
+    originalFileName: file.name,
+    fileSize: file.size,
+    mimeType: "application/pdf",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  try {
+    await saveCvFile(cv.id, file);
+    appState.cvs.unshift(cv);
+    writeStorage(STORAGE_KEYS.cvs, appState.cvs);
+    appState.candidateTab = "profile";
+    renderCandidateView();
+    showToast(`Đã tải lên ${cv.name}`, "success");
+  } catch {
+    input.value = "";
+    showToast("Không thể lưu tệp PDF trên trình duyệt này.", "error");
+  }
+}
+
+async function viewUploadedCv(cvId) {
+  const cv = appState.cvs.find((item) => item.id === cvId && item.candidateId === appState.currentUser.id);
+  if (!cv || cv.source !== "upload") return;
+  const previewWindow = window.open("", "_blank");
+  try {
+    const file = await readCvFile(cvId);
+    if (!file) throw new Error("CV file missing");
+    const url = URL.createObjectURL(file);
+    if (previewWindow) previewWindow.location.href = url;
+    else showToast("Trình duyệt đang chặn cửa sổ xem PDF.", "info");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    previewWindow?.close();
+    showToast("Không tìm thấy tệp PDF. Bạn có thể tải lên lại CV.", "error");
+  }
+}
+
+async function deleteCandidateCv(cvId) {
+  const cv = appState.cvs.find((item) => item.id === cvId && item.candidateId === appState.currentUser.id);
+  if (!cv) return;
+  const usedCount = appState.applications.filter((application) => application.cvId === cv.id).length;
+  const detail = usedCount ? ` CV này đã dùng cho ${usedCount} hồ sơ; tên CV vẫn được giữ trong lịch sử.` : "";
+  if (!window.confirm(`Bạn chắc chắn muốn xoá \"${cv.name}\"?${detail}`)) return;
+
+  appState.cvs = appState.cvs.filter((item) => item.id !== cv.id);
+  writeStorage(STORAGE_KEYS.cvs, appState.cvs);
+  if (cv.source === "upload") {
+    try {
+      await removeCvFile(cv.id);
+    } catch {
+      // Metadata is already removed; an orphaned browser blob is harmless.
+    }
+  }
+  appState.candidateTab = "profile";
+  renderCandidateView();
+  showToast(`Đã xoá ${cv.name}`, "success");
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function bindCareerCategoryRail() {
@@ -1618,27 +1924,225 @@ function applyJob(jobId) {
 
   const applied = appState.currentUser.appliedJobs.includes(jobId);
   if (applied) {
-    showToast("Ban da ung tuyen cong viec nay.", "info");
+    showToast("Bạn đã ứng tuyển công việc này.", "info");
+    return;
+  }
+
+  openApplicationModal(jobId);
+}
+
+function openApplicationModal(jobId) {
+  const job = appState.jobs.find((item) => item.id === jobId);
+  if (!job) return;
+  const cvs = getCandidateCvs();
+
+  closeJobDetailModal();
+  closeApplicationModal();
+  document.body.classList.add("modal-open");
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+      <div id="applicationModal" class="modal-backdrop" role="presentation">
+        <section class="application-modal" role="dialog" aria-modal="true" aria-labelledby="applicationModalTitle">
+          <button class="modal-close" data-close-application type="button" aria-label="Đóng quy trình ứng tuyển">&times;</button>
+          <header class="application-modal-header">
+            <p class="eyebrow">Ứng tuyển vào ${escapeHtml(job.company)}</p>
+            <h2 id="applicationModalTitle">${escapeHtml(job.title)}</h2>
+          </header>
+
+          <ol class="application-steps" aria-label="Các bước ứng tuyển">
+            <li class="active" data-application-step-indicator="1"><span>1</span> Chọn CV</li>
+            <li data-application-step-indicator="2"><span>2</span> Thư giới thiệu</li>
+            <li data-application-step-indicator="3"><span>3</span> Xác nhận</li>
+          </ol>
+
+          <form id="applicationForm">
+            <section class="application-step-panel active" data-application-step="1">
+              <div class="application-section-heading">
+                <h3>Chọn CV gửi đến nhà tuyển dụng</h3>
+                <p>CV đã chọn sẽ được ghi lại cùng hồ sơ ứng tuyển.</p>
+              </div>
+              <div class="application-cv-options">
+                ${
+                  cvs.length
+                    ? cvs
+                        .map(
+                          (cv, index) => `
+                            <label class="application-cv-option">
+                              <input name="applicationCv" type="radio" value="${cv.id}" ${index === 0 ? "checked" : ""} />
+                              <span class="cv-file-icon">CV</span>
+                              <span>
+                                <strong>${escapeHtml(cv.name)}</strong>
+                                <small>${cv.source === "profile" ? "Tạo online từ hồ sơ" : "CV tải lên"} • ${formatDate(cv.updatedAt)}</small>
+                              </span>
+                            </label>
+                          `,
+                        )
+                        .join("")
+                    : `<div class="empty-state compact-empty">Bạn chưa có CV để ứng tuyển.</div>`
+                }
+              </div>
+              <button class="inline-create-cv" data-create-application-cv type="button">+ Tạo CV online từ hồ sơ</button>
+            </section>
+
+            <section class="application-step-panel" data-application-step="2" hidden>
+              <div class="application-section-heading">
+                <h3>Viết thư giới thiệu</h3>
+                <p>Giới thiệu ngắn gọn kinh nghiệm và lý do bạn phù hợp với vị trí này.</p>
+              </div>
+              <label class="cover-letter-field">
+                Thư giới thiệu
+                <textarea id="applicationCoverLetter" maxlength="2000" rows="8" placeholder="Kính gửi nhà tuyển dụng, tôi quan tâm đến vị trí..."></textarea>
+                <small><span id="coverLetterCount">0</span>/2000 ký tự</small>
+              </label>
+            </section>
+
+            <section class="application-step-panel" data-application-step="3" hidden>
+              <div class="application-section-heading">
+                <h3>Xác nhận thông tin trước khi gửi</h3>
+                <p>Kiểm tra lại thông tin. Sau khi gửi, bạn chỉ có thể rút khi hồ sơ còn ở trạng thái “Đã nộp”.</p>
+              </div>
+              <dl class="application-confirmation">
+                <div><dt>Vị trí</dt><dd>${escapeHtml(job.title)} • ${escapeHtml(job.company)}</dd></div>
+                <div><dt>Ứng viên</dt><dd>${escapeHtml(appState.currentUser.name)}</dd></div>
+                <div><dt>Liên hệ</dt><dd>${escapeHtml(appState.currentUser.email)}${appState.currentUser.phone ? ` • ${escapeHtml(appState.currentUser.phone)}` : ""}</dd></div>
+                <div><dt>CV sử dụng</dt><dd id="confirmCvName">—</dd></div>
+                <div><dt>Thư giới thiệu</dt><dd id="confirmCoverLetter" class="confirmation-cover-letter">—</dd></div>
+              </dl>
+              <label class="application-confirm-check">
+                <input id="applicationConfirmed" type="checkbox" />
+                <span>Tôi xác nhận thông tin trên là chính xác.</span>
+              </label>
+            </section>
+
+            <div id="applicationFormMessage" class="auth-message" aria-live="polite"></div>
+            <footer class="application-modal-actions">
+              <button class="ghost-button" data-application-previous type="button" hidden>Quay lại</button>
+              <span></span>
+              <button class="primary-button" data-application-next type="button" ${cvs.length ? "" : "disabled"}>Tiếp tục</button>
+              <button class="primary-button" data-submit-application type="submit" hidden>Gửi hồ sơ</button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    `,
+  );
+
+  const modal = document.querySelector("#applicationModal");
+  modal.dataset.currentStep = "1";
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal || event.target.closest("[data-close-application]")) closeApplicationModal();
+  });
+  modal.querySelector("[data-create-application-cv]").addEventListener("click", () => {
+    const cv = createCvFromProfile();
+    closeApplicationModal();
+    openApplicationModal(jobId);
+    showToast(`Đã tạo ${cv.name}`, "success");
+  });
+  modal.querySelector("[data-application-next]").addEventListener("click", () => moveApplicationStep(1));
+  modal.querySelector("[data-application-previous]").addEventListener("click", () => moveApplicationStep(-1));
+  modal.querySelector("#applicationCoverLetter").addEventListener("input", (event) => {
+    modal.querySelector("#coverLetterCount").textContent = event.target.value.length;
+  });
+  modal.querySelector("#applicationForm").addEventListener("submit", (event) => submitApplication(event, jobId));
+  document.addEventListener("keydown", handleApplicationEscape);
+  modal.querySelector('input[name="applicationCv"]')?.focus();
+}
+
+function moveApplicationStep(direction) {
+  const modal = document.querySelector("#applicationModal");
+  if (!modal) return;
+  const currentStep = Number(modal.dataset.currentStep || 1);
+  if (direction > 0 && currentStep === 1 && !modal.querySelector('input[name="applicationCv"]:checked')) {
+    showInlineMessage("#applicationFormMessage", "Vui lòng chọn CV trước khi tiếp tục.", "error");
+    return;
+  }
+  if (direction > 0 && currentStep === 2) {
+    const coverLetter = modal.querySelector("#applicationCoverLetter").value.trim();
+    if (coverLetter.length < 20) {
+      showInlineMessage("#applicationFormMessage", "Thư giới thiệu cần tối thiểu 20 ký tự.", "error");
+      return;
+    }
+  }
+
+  const nextStep = Math.min(3, Math.max(1, currentStep + direction));
+  modal.dataset.currentStep = String(nextStep);
+  modal.querySelector("#applicationFormMessage").textContent = "";
+  modal.querySelectorAll("[data-application-step]").forEach((panel) => {
+    const active = Number(panel.dataset.applicationStep) === nextStep;
+    panel.hidden = !active;
+    panel.classList.toggle("active", active);
+  });
+  modal.querySelectorAll("[data-application-step-indicator]").forEach((indicator) => {
+    const step = Number(indicator.dataset.applicationStepIndicator);
+    indicator.classList.toggle("active", step === nextStep);
+    indicator.classList.toggle("complete", step < nextStep);
+  });
+  modal.querySelector("[data-application-previous]").hidden = nextStep === 1;
+  modal.querySelector("[data-application-next]").hidden = nextStep === 3;
+  modal.querySelector("[data-submit-application]").hidden = nextStep !== 3;
+
+  if (nextStep === 3) updateApplicationConfirmation();
+  if (nextStep === 2) modal.querySelector("#applicationCoverLetter").focus();
+  if (nextStep === 3) modal.querySelector("#applicationConfirmed").focus();
+}
+
+function updateApplicationConfirmation() {
+  const modal = document.querySelector("#applicationModal");
+  const selectedCvId = Number(modal.querySelector('input[name="applicationCv"]:checked')?.value);
+  const cv = appState.cvs.find((item) => item.id === selectedCvId);
+  modal.querySelector("#confirmCvName").textContent = cv?.name || "—";
+  modal.querySelector("#confirmCoverLetter").textContent = modal.querySelector("#applicationCoverLetter").value.trim() || "—";
+}
+
+function submitApplication(event, jobId) {
+  event.preventDefault();
+  const modal = document.querySelector("#applicationModal");
+  if (!modal.querySelector("#applicationConfirmed").checked) {
+    showInlineMessage("#applicationFormMessage", "Vui lòng xác nhận thông tin trước khi gửi.", "error");
+    return;
+  }
+  const job = appState.jobs.find((item) => item.id === jobId);
+  const cvId = Number(modal.querySelector('input[name="applicationCv"]:checked')?.value);
+  const cv = appState.cvs.find((item) => item.id === cvId && item.candidateId === appState.currentUser.id);
+  if (!job || !cv || appState.currentUser.appliedJobs.includes(jobId)) {
+    showInlineMessage("#applicationFormMessage", "Không thể gửi hồ sơ. Vui lòng kiểm tra lại CV đã chọn.", "error");
     return;
   }
 
   updateCurrentUser({
     appliedJobs: [...appState.currentUser.appliedJobs, jobId],
   });
-  appState.applications.unshift({
-    id: Date.now(),
-    candidateId: appState.currentUser.id,
-    candidateName: appState.currentUser.name,
-    jobId: job.id,
-    jobTitle: job.title,
-    company: job.company,
-    status: "Da nop",
-    appliedAt: toDateInput(new Date()),
-  });
+  appState.applications.unshift(
+    normalizeApplication({
+      id: Date.now(),
+      candidateId: appState.currentUser.id,
+      candidateName: appState.currentUser.name,
+      jobId: job.id,
+      jobTitle: job.title,
+      company: job.company,
+      status: "Da nop",
+      appliedAt: new Date().toISOString(),
+      cvId: cv.id,
+      cvName: cv.name,
+      coverLetter: modal.querySelector("#applicationCoverLetter").value.trim(),
+      withdrawnAt: null,
+    }),
+  );
   writeStorage(STORAGE_KEYS.applications, appState.applications);
-  closeJobDetailModal();
+  closeApplicationModal();
   renderCandidateView();
-  showToast("Ung tuyen thanh cong", "success");
+  showToast("Ứng tuyển thành công", "success");
+}
+
+function closeApplicationModal() {
+  document.querySelector("#applicationModal")?.remove();
+  if (!document.querySelector("#jobDetailModal")) document.body.classList.remove("modal-open");
+  document.removeEventListener("keydown", handleApplicationEscape);
+}
+
+function handleApplicationEscape(event) {
+  if (event.key === "Escape") closeApplicationModal();
 }
 
 function toggleSavedJob(jobId) {
@@ -1656,6 +2160,20 @@ function toggleSavedJob(jobId) {
 function bindCandidateProfile() {
   document.querySelector("#candidateProfileForm").addEventListener("submit", handleProfileSubmit);
   document.querySelector("#skillInput").addEventListener("keydown", handleSkillInput);
+  document.querySelector("#createCvFromProfile")?.addEventListener("click", () => {
+    const input = document.querySelector("#onlineCvName");
+    const cv = createCvFromProfile(input?.value || "");
+    appState.candidateTab = "profile";
+    renderCandidateView();
+    showToast(`Đã tạo ${cv.name}`, "success");
+  });
+  document.querySelector("#candidateCvUpload")?.addEventListener("change", uploadCvFromComputer);
+  document.querySelectorAll("[data-view-cv]").forEach((button) => {
+    button.addEventListener("click", () => viewUploadedCv(Number(button.dataset.viewCv)));
+  });
+  document.querySelectorAll("[data-delete-cv]").forEach((button) => {
+    button.addEventListener("click", () => deleteCandidateCv(Number(button.dataset.deleteCv)));
+  });
   document.querySelectorAll("[data-remove-skill]").forEach((button) => {
     button.addEventListener("click", () => removeSkill(button.dataset.removeSkill));
   });
@@ -1731,14 +2249,14 @@ function renderSkillTag(skill) {
 
 function renderCandidateHistory() {
   const root = document.querySelector("#applicationHistory");
-  const rows = appState.currentUser.appliedJobs
-    .map((jobId) => {
-      const job = appState.jobs.find((item) => item.id === jobId);
-      const application = appState.applications.find(
-        (item) => item.jobId === jobId && item.candidateId === appState.currentUser.id,
-      );
+  const rows = appState.applications
+    .filter((application) => application.candidateId === appState.currentUser.id)
+    .sort((first, second) => Date.parse(second.appliedAt) - Date.parse(first.appliedAt))
+    .map((application) => {
+      const job = appState.jobs.find((item) => item.id === application.jobId);
       if (!job) return "";
-      const status = application?.status || "Da nop";
+      const status = application.withdrawnAt ? "Da rut" : application.status || "Da nop";
+      const canWithdraw = !application.withdrawnAt && application.status === "Da nop";
       return `
         <tr>
           <td>
@@ -1746,8 +2264,13 @@ function renderCandidateHistory() {
             <span>${escapeHtml(job.company)}</span>
           </td>
           <td>${escapeHtml(job.location)}</td>
-          <td>${escapeHtml(application?.appliedAt || toDateInput(new Date()))}</td>
+          <td>${formatDate(application.appliedAt)}</td>
+          <td>
+            <strong>${escapeHtml(application.cvName)}</strong>
+            <span class="history-cover-letter" title="${escapeHtml(application.coverLetter)}">${escapeHtml(application.coverLetter || "Không có thư giới thiệu")}</span>
+          </td>
           <td><span class="history-status ${getHistoryStatusClass(status)}">${escapeHtml(status)}</span></td>
+          <td>${canWithdraw ? `<button class="withdraw-application-button" data-withdraw-application="${application.id}" type="button">Rút hồ sơ</button>` : "—"}</td>
         </tr>
       `;
     })
@@ -1765,12 +2288,38 @@ function renderCandidateHistory() {
           <th>Cong viec</th>
           <th>Dia diem</th>
           <th>Ngay nop</th>
+          <th>CV đã dùng</th>
           <th>Trang thai</th>
+          <th>Thao tác</th>
         </tr>
       </thead>
       <tbody>${rows.join("")}</tbody>
     </table>
   `;
+  root.querySelectorAll("[data-withdraw-application]").forEach((button) => {
+    button.addEventListener("click", () => withdrawApplication(Number(button.dataset.withdrawApplication)));
+  });
+}
+
+function withdrawApplication(applicationId) {
+  const application = appState.applications.find(
+    (item) => item.id === applicationId && item.candidateId === appState.currentUser.id,
+  );
+  if (!application || application.withdrawnAt || application.status !== "Da nop") {
+    showToast("Hồ sơ không còn ở trạng thái mới nộp nên không thể rút.", "error");
+    return;
+  }
+  if (!window.confirm("Bạn chắc chắn muốn rút hồ sơ này?")) return;
+
+  application.withdrawnAt = new Date().toISOString();
+  writeStorage(STORAGE_KEYS.applications, appState.applications);
+  const activeJobIds = appState.applications
+    .filter((item) => item.candidateId === appState.currentUser.id && !item.withdrawnAt)
+    .map((item) => item.jobId);
+  updateCurrentUser({ appliedJobs: Array.from(new Set(activeJobIds)) });
+  appState.candidateTab = "history";
+  renderCandidateView();
+  showToast("Đã rút hồ sơ thành công", "success");
 }
 
 function renderSavedJobs() {
@@ -1791,6 +2340,7 @@ function renderSavedJobs() {
 function getHistoryStatusClass(status) {
   if (status === "Len lich phong van") return "interview";
   if (status === "Tu choi") return "rejected";
+  if (status === "Da rut") return "withdrawn";
   return "submitted";
 }
 
@@ -1921,7 +2471,7 @@ function renderEmployerKanbanTab() {
     <div class="kanban-board employer-kanban">
       ${columns
         .map((column) => {
-          const cards = appState.applications.filter((item) => item.status === column.id);
+          const cards = appState.applications.filter((item) => item.status === column.id && !item.withdrawnAt);
           return `
             <section class="kanban-column">
               <div class="kanban-column-header">
@@ -1945,6 +2495,7 @@ function renderApplicationCard(application) {
       <strong>${escapeHtml(application.candidateName)}</strong>
       <span>${escapeHtml(application.jobTitle)}</span>
       <small>${escapeHtml(application.company)} - ${formatDate(application.appliedAt)}</small>
+      <small>CV: ${escapeHtml(application.cvName || "Không xác định")}</small>
     </article>
   `;
 }
@@ -2090,15 +2641,6 @@ function showToast(message, type = "success") {
     toast.classList.add("leaving");
     toast.addEventListener("transitionend", () => toast.remove(), { once: true });
   }, 2200);
-}
-
-function getRoleLabel(role) {
-  const labels = {
-    candidate: "Ung vien",
-    employer: "Nha tuyen dung",
-    admin: "Quan tri vien",
-  };
-  return labels[role] || role;
 }
 
 function startRealtimeUpdates() {
