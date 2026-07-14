@@ -230,6 +230,15 @@ const seedApplications = [
   },
 ];
 
+const featuredEmployers = [
+  { name: "BridgeTech", mark: "BT", field: "Công nghệ", tone: "blue" },
+  { name: "Nova Studio", mark: "NS", field: "Thiết kế sáng tạo", tone: "violet" },
+  { name: "CloudNest", mark: "CN", field: "Nền tảng đám mây", tone: "cyan" },
+  { name: "FinSight", mark: "FS", field: "Tài chính dữ liệu", tone: "green" },
+  { name: "VietData", mark: "VD", field: "Dữ liệu doanh nghiệp", tone: "orange" },
+  { name: "GreenWorks", mark: "GW", field: "Giải pháp bền vững", tone: "emerald" },
+];
+
 const seedCvs = [
   {
     id: 501,
@@ -740,6 +749,7 @@ function renderDashboard() {
       ${renderTopbarUserArea(user)}
     </header>
     <main id="dashboardRoot" class="spa-dashboard"></main>
+    ${renderTopEmployers()}
     ${renderSiteFooter(user)}
   `;
 
@@ -756,6 +766,7 @@ function renderDashboard() {
   if (user.role === "admin") renderAdminView();
 
   bindSiteFooter();
+  bindTopEmployers();
 
   startRealtimeUpdates();
 }
@@ -834,6 +845,60 @@ function renderSiteNavigation() {
 
 function renderBrandLogo() {
   return `<img class="brand-logo" src="../assets/jobbridge-logo.png" alt="JobBridge" />`;
+}
+
+function renderTopEmployers() {
+  return `
+    <section class="top-employers" aria-labelledby="topEmployersTitle">
+      <div class="top-employers-inner">
+        <p class="top-employers-eyebrow">Đối tác tuyển dụng uy tín</p>
+        <h2 id="topEmployersTitle">Nhà tuyển dụng hàng đầu</h2>
+        <p class="top-employers-description">Khám phá cơ hội nghề nghiệp từ những doanh nghiệp nổi bật trên JobBridge.</p>
+        <div class="top-employer-grid">
+          ${featuredEmployers
+            .map(
+              (employer) => `
+                <button class="top-employer-card" data-top-employer="${escapeHtml(employer.name)}" type="button" aria-label="Xem việc làm tại ${escapeHtml(employer.name)}">
+                  <span class="top-employer-mark top-employer-mark-${employer.tone}" aria-hidden="true">${escapeHtml(employer.mark)}</span>
+                  <span class="top-employer-copy">
+                    <strong>${escapeHtml(employer.name)}</strong>
+                    <small>${escapeHtml(employer.field)}</small>
+                  </span>
+                </button>
+              `,
+            )
+            .join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function bindTopEmployers() {
+  document.querySelectorAll("[data-top-employer]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const company = button.dataset.topEmployer;
+      if (appState.currentUser.role !== "candidate") {
+        showToast(`Đăng nhập bằng tài khoản ứng viên để xem việc làm tại ${company}.`);
+        return;
+      }
+
+      const hasOpenJobs = appState.jobs.some(
+        (job) => job.status === "Approved" && job.company.toLowerCase() === company.toLowerCase(),
+      );
+      if (!hasOpenJobs) {
+        showToast(`${company} hiện chưa có vị trí đang tuyển.`);
+        return;
+      }
+
+      if (window.location.pathname !== "/") window.history.pushState({}, "", "/");
+      appState.detailJobId = null;
+      appState.candidateKeyword = company;
+      appState.candidateTab = "jobs";
+      renderCandidateView();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
 }
 
 function renderSiteFooter(user) {
@@ -962,7 +1027,14 @@ function renderCandidateAccountMenu(user) {
     { label: "Nhà tuyển dụng muốn kết nối với bạn", tab: "profile" },
     { label: "Nhà tuyển dụng xem hồ sơ", tab: "profile" },
   ];
-
+  const emailItems = [
+    { label: "Cài đặt nhận email", tab: "profile" },
+    { label: "Thông báo việc làm", tab: "jobs" },
+  ];
+  const securityItems = [
+    { label: "Thông tin cá nhân", tab: "profile" },
+    { label: "Cài đặt bảo mật", tab: "profile" },
+  ];
   return `
     <div id="candidateAccountMenu" class="candidate-account-menu" hidden>
       <div class="account-menu-profile">
@@ -974,11 +1046,10 @@ function renderCandidateAccountMenu(user) {
         </div>
       </div>
       <div class="account-menu-divider"></div>
-      ${renderAccountMenuGroup("jobs", "Quản lý tìm việc", jobItems, true)}
-      ${renderAccountMenuGroup("cv", "Quản lý CV & Cover letter", cvItems, true)}
-      ${renderAccountMenuGroup("mail", "Cài đặt email & thông báo", [], false)}
-      ${renderAccountMenuGroup("security", "Cá nhân & Bảo mật", [], false)}
-      ${renderAccountMenuGroup("upgrade", "Nâng cấp tài khoản", [], false)}
+      ${renderAccountMenuGroup("jobs", "Quản lý tìm việc", jobItems, false, true)}
+      ${renderAccountMenuGroup("cv", "Quản lý CV & Cover letter", cvItems)}
+      ${renderAccountMenuGroup("mail", "Cài đặt email & thông báo", emailItems)}
+      ${renderAccountMenuGroup("security", "Cá nhân & Bảo mật", securityItems)}
       <button id="logoutButton" class="account-logout-button" type="button">
         ${renderAccountIcon("logout")}
         <span>Đăng xuất</span>
@@ -987,31 +1058,28 @@ function renderCandidateAccountMenu(user) {
   `;
 }
 
-function renderAccountMenuGroup(icon, label, items, expanded) {
+function renderAccountMenuGroup(icon, label, items, expanded = false, current = false) {
+  const panelId = `accountMenuGroup-${icon}`;
   return `
-    <section class="account-menu-group">
-      <button class="account-menu-group-head" type="button">
+    <section class="account-menu-group ${current ? "is-current" : ""}">
+      <button class="account-menu-group-head" data-account-group-toggle type="button" aria-expanded="${expanded}" aria-controls="${panelId}">
         <span class="account-menu-group-title">
           ${renderAccountIcon(icon)}
           <strong>${escapeHtml(label)}</strong>
         </span>
-        ${renderAccountIcon(expanded ? "chevronUp" : "chevronDown")}
+        ${renderAccountIcon("chevronDown")}
       </button>
-      ${
-        items.length
-          ? `<div class="account-menu-subitems">
-              ${items
-                .map(
-                  (item) => `
-                    <button class="account-menu-subitem" data-candidate-account-tab="${escapeHtml(item.tab)}" type="button">
-                      ${escapeHtml(item.label)}
-                    </button>
-                  `,
-                )
-                .join("")}
-            </div>`
-          : ""
-      }
+      <div id="${panelId}" class="account-menu-subitems" ${expanded ? "" : "hidden"}>
+        ${items
+          .map(
+            (item) => `
+              <button class="account-menu-subitem" data-candidate-account-tab="${escapeHtml(item.tab)}" type="button">
+                ${escapeHtml(item.label)}
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
     </section>
   `;
 }
@@ -1031,6 +1099,29 @@ function bindCandidateAccountMenu() {
   });
 
   menu.addEventListener("click", (event) => event.stopPropagation());
+  const groupToggles = [...menu.querySelectorAll("[data-account-group-toggle]")];
+  groupToggles.forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      const willExpand = toggle.getAttribute("aria-expanded") !== "true";
+
+      groupToggles.forEach((otherToggle) => {
+        otherToggle.setAttribute("aria-expanded", "false");
+        otherToggle.closest(".account-menu-group")?.classList.remove("is-current");
+        const otherPanel = document.querySelector(`#${otherToggle.getAttribute("aria-controls")}`);
+        if (otherPanel) otherPanel.hidden = true;
+      });
+
+      if (willExpand) {
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.closest(".account-menu-group")?.classList.add("is-current");
+        const panel = document.querySelector(`#${toggle.getAttribute("aria-controls")}`);
+        if (panel) panel.hidden = false;
+      } else {
+        menu.querySelector(".account-menu-group")?.classList.add("is-current");
+      }
+    });
+  });
+
   menu.querySelectorAll("[data-candidate-account-tab]").forEach((item) => {
     item.addEventListener("click", () => {
       showCandidateTab(item.dataset.candidateAccountTab);
