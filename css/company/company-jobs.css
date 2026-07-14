@@ -1,0 +1,22 @@
+.company-table-panel { overflow: hidden; }
+.company-table-scroll { overflow-x: auto; }
+.company-table { width: 100%; border-collapse: collapse; }
+.company-table th { padding: 11px 16px; color: #758291; background: #f6f8f9; font-size: 10px; text-align: left; text-transform: uppercase; }
+.company-table td { border-top: 1px solid #e9edef; padding: 14px 16px; color: #394b5d; font-size: 12px; vertical-align: middle; }
+.company-table tbody tr:hover { background: #fbfcfc; }
+.company-job-title,
+.company-candidate-cell { display: flex; min-width: 240px; align-items: center; gap: 11px; }
+.company-job-mark { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 7px; color: #315071; background: #eaf0f5; font-size: 10px; font-weight: 900; }
+.company-job-title strong,
+.company-job-title small,
+.company-candidate-cell strong,
+.company-candidate-cell small { display: block; }
+.company-job-title strong,
+.company-candidate-cell strong { color: var(--company-navy); font-size: 12px; }
+.company-job-title small,
+.company-candidate-cell small,
+.company-cell-secondary { margin-top: 4px; color: var(--company-muted); font-size: 10px; }
+.company-cell-secondary { display: block; }
+.company-table time { white-space: nowrap; color: var(--company-muted); }
+.company-table-actions { display: flex; min-width: 180px; justify-content: flex-end; gap: 6px; }
+.company-table-action-single { min-width: 130px; text-align: right; }

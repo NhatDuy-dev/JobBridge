@@ -1,0 +1,70 @@
+@media (max-width: 1120px) {
+  .company-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .company-dashboard-grid { grid-template-columns: 1fr; }
+  .company-application-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .company-application-toolbar .company-button { align-self: end; }
+}
+
+@media (max-width: 900px) {
+  body[data-role="employer"] .spa-topbar { grid-template-columns: auto 1fr auto; padding: 12px 20px; }
+  .company-app { grid-template-columns: 1fr; }
+  .company-sidebar { position: static; display: block; border-right: 0; border-bottom: 1px solid var(--company-line); padding: 14px 20px; }
+  .company-sidebar-heading { display: none; }
+  .company-nav { display: flex; overflow-x: auto; gap: 7px; margin: 0; padding-bottom: 2px; }
+  .company-nav-item { min-width: max-content; grid-template-columns: 18px auto auto; }
+  .company-sidebar-note { display: none; }
+  .company-main { padding: 24px 20px 40px; }
+  .company-profile-layout { grid-template-columns: 1fr; }
+  .company-profile-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; text-align: left; }
+  .company-profile-logo { grid-row: 1 / 4; margin: 0; }
+  .company-profile-summary > p { margin: 0; }
+  .company-profile-progress,
+  .company-profile-summary dl { grid-column: 1 / -1; }
+}
+
+@media (max-width: 680px) {
+  body[data-role="employer"] .spa-topbar { display: flex; flex-wrap: wrap; justify-content: space-between; }
+  body[data-role="employer"] .spa-brand .brand-logo { width: 122px; }
+  body[data-role="employer"] .spa-user-name { display: none; }
+  .company-main { padding: 20px 14px 34px; }
+  .company-page-header { align-items: flex-start; }
+  .company-page-header h1 { font-size: 22px; }
+  .company-page-header .company-button span { display: none; }
+  .company-welcome-band { align-items: flex-start; flex-direction: column; padding: 20px; }
+  .company-welcome-actions { width: 100%; }
+  .company-welcome-actions .company-button { flex: 1; }
+  .company-stat-grid,
+  .company-pipeline,
+  .company-toolbar,
+  .company-application-toolbar,
+  .company-form-grid,
+  .company-detail-grid,
+  .company-status-form { grid-template-columns: 1fr; }
+  .company-field-wide { grid-column: auto; }
+  .company-panel-heading { align-items: flex-start; flex-direction: column; }
+  .company-panel-note { text-align: left; }
+  .company-recent-row { grid-template-columns: 38px minmax(0, 1fr) auto; }
+  .company-recent-row time { display: none; }
+  .company-form-footer { align-items: stretch; flex-direction: column; }
+  .company-modal-backdrop { padding: 12px; }
+  .company-modal-header,
+  .company-modal > .company-form,
+  .company-application-detail { padding: 16px; }
+  .company-candidate-summary { align-items: flex-start; }
+  .company-contact-list { display: grid; }
+  .company-table thead { display: none; }
+  .company-table,
+  .company-table tbody,
+  .company-table tr,
+  .company-table td { display: block; width: 100%; }
+  .company-table tr { border-top: 1px solid var(--company-line); padding: 12px 14px; }
+  .company-table td { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 0; padding: 6px 0; }
+  .company-table td::before { content: attr(data-label); color: var(--company-muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+  .company-table td:first-child { display: block; }
+  .company-table td:first-child::before,
+  .company-table td:last-child::before { display: none; }
+  .company-table-actions,
+  .company-table-action-single { min-width: 0; justify-content: flex-start; text-align: left; }
+  .company-job-title,
+  .company-candidate-cell { min-width: 0; }
+}
