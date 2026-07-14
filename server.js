@@ -10,6 +10,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const db = openDatabase(process.env.DB_PATH || undefined);
 const port = Number(process.env.PORT || 3000);
 const SESSION_DAYS = 7;
+const MAX_CV_FILE_SIZE = 5 * 1024 * 1024;
 
 const json = (res, status, data) => {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -24,6 +25,16 @@ const body = async (req) => {
   }
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { throw Object.assign(new Error("JSON không hợp lệ"), { status: 400 }); }
+};
+const binaryBody = async (req, maxBytes) => {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw Object.assign(new Error("Tệp tải lên quá lớn"), { status: 413 });
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 };
 const route = (pattern, pathname) => {
   const keys = [];
@@ -121,21 +132,89 @@ async function api(req, res, url) {
     return json(res, 200, { job: mapJob(db.prepare("SELECT * FROM jobs WHERE id=?").get(Number(params.id))) });
   }
 
+  if (req.method === "GET" && pathname === "/api/cvs") {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const cvs = db.prepare("SELECT id,candidate_id,name,source,original_file_name,mime_type,file_size,created_at,updated_at FROM cvs WHERE candidate_id=? ORDER BY updated_at DESC").all(user.id);
+    return json(res, 200, { cvs });
+  }
+  if (req.method === "POST" && pathname === "/api/cvs/from-profile") {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const d = await body(req);
+    const name = String(d.name || `CV ${user.desired_title || user.name}`).trim();
+    if (!name || name.length > 120) return fail(res, 422, "Tên CV không hợp lệ", "VALIDATION_ERROR");
+    const profile = publicUser(db, user);
+    const result = db.prepare("INSERT INTO cvs(candidate_id,name,source,profile_snapshot) VALUES(?,?,?,?)")
+      .run(user.id, name, "profile", JSON.stringify(profile));
+    return json(res, 201, { cv: db.prepare("SELECT id,candidate_id,name,source,original_file_name,mime_type,file_size,created_at,updated_at FROM cvs WHERE id=?").get(result.lastInsertRowid) });
+  }
+  if (req.method === "POST" && pathname === "/api/cvs/upload") {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const file = await binaryBody(req, MAX_CV_FILE_SIZE);
+    const originalFileName = String(searchParams.get("fileName") || "cv.pdf").trim();
+    const name = String(searchParams.get("name") || originalFileName.replace(/\.pdf$/i, "")).trim();
+    const isPdf = req.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase() === "application/pdf";
+    if (!file.length || !isPdf || file.subarray(0, 5).toString("ascii") !== "%PDF-") return fail(res, 422, "Vui lòng tải lên tệp PDF hợp lệ", "INVALID_CV_FILE");
+    if (!name || name.length > 120 || originalFileName.length > 255) return fail(res, 422, "Tên CV không hợp lệ", "VALIDATION_ERROR");
+    const result = db.prepare(`INSERT INTO cvs(candidate_id,name,source,original_file_name,mime_type,file_size,file_data)
+      VALUES(?,?,?,?,?,?,?)`).run(user.id, name, "upload", originalFileName, "application/pdf", file.length, file);
+    return json(res, 201, { cv: db.prepare("SELECT id,candidate_id,name,source,original_file_name,mime_type,file_size,created_at,updated_at FROM cvs WHERE id=?").get(result.lastInsertRowid) });
+  }
+  params = route("/api/cvs/:id/file", pathname);
+  if (req.method === "GET" && params) {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const cv = db.prepare("SELECT * FROM cvs WHERE id=? AND candidate_id=? AND source='upload'").get(Number(params.id), user.id);
+    if (!cv?.file_data) return fail(res, 404, "Không tìm thấy tệp CV", "NOT_FOUND");
+    const safeName = encodeURIComponent(cv.original_file_name || `${cv.name}.pdf`);
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Length": cv.file_data.length,
+      "Content-Disposition": `inline; filename*=UTF-8''${safeName}`,
+      "Cache-Control": "private, no-store",
+    });
+    return res.end(cv.file_data);
+  }
+  params = route("/api/cvs/:id", pathname);
+  if (req.method === "DELETE" && params) {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const result = db.prepare("DELETE FROM cvs WHERE id=? AND candidate_id=?").run(Number(params.id), user.id);
+    if (!result.changes) return fail(res, 404, "Không tìm thấy CV", "NOT_FOUND");
+    return json(res, 200, { deleted: true });
+  }
+
   if (req.method === "POST" && pathname === "/api/applications") {
     const user = requireUser(req, res, ["candidate"]); if (!user) return;
     const d = await body(req), job = db.prepare("SELECT * FROM jobs WHERE id=? AND status='Approved'").get(Number(d.jobId));
     if (!job) return fail(res, 404, "Việc làm không tồn tại hoặc chưa được duyệt", "NOT_FOUND");
+    const cv = db.prepare("SELECT * FROM cvs WHERE id=? AND candidate_id=?").get(Number(d.cvId), user.id);
+    if (!cv) return fail(res, 422, "Vui lòng chọn CV hợp lệ", "CV_REQUIRED");
+    const coverLetter = String(d.coverLetter || "").trim();
+    if (coverLetter.length < 20 || coverLetter.length > 2000) return fail(res, 422, "Thư giới thiệu phải có từ 20 đến 2000 ký tự", "VALIDATION_ERROR");
     try {
-      const id = db.prepare("INSERT INTO applications(candidate_id,job_id,cover_letter) VALUES(?,?,?)").run(user.id, job.id, String(d.coverLetter || "")).lastInsertRowid;
+      const previous = db.prepare("SELECT * FROM applications WHERE candidate_id=? AND job_id=?").get(user.id, job.id);
+      if (previous?.withdrawn_at) {
+        db.prepare(`UPDATE applications SET status='Da nop',cover_letter=?,cv_id=?,cv_name=?,withdrawn_at=NULL,applied_at=datetime('now'),updated_at=datetime('now') WHERE id=?`)
+          .run(coverLetter, cv.id, cv.name, previous.id);
+        return json(res, 200, { application: db.prepare("SELECT * FROM applications WHERE id=?").get(previous.id) });
+      }
+      const id = db.prepare("INSERT INTO applications(candidate_id,job_id,cover_letter,cv_id,cv_name) VALUES(?,?,?,?,?)").run(user.id, job.id, coverLetter, cv.id, cv.name).lastInsertRowid;
       return json(res, 201, { application: db.prepare("SELECT * FROM applications WHERE id=?").get(id) });
     } catch (error) { if (error.message.includes("UNIQUE")) return fail(res, 409, "Bạn đã ứng tuyển công việc này", "ALREADY_APPLIED"); throw error; }
   }
   if (req.method === "GET" && pathname === "/api/applications") {
     const user = requireUser(req, res); if (!user) return;
-    const where = user.role === "candidate" ? "a.candidate_id=?" : user.role === "employer" ? "j.employer_id=?" : "1=1";
+    const where = user.role === "candidate" ? "a.candidate_id=?" : user.role === "employer" ? "j.employer_id=? AND a.withdrawn_at IS NULL" : "1=1";
     const args = user.role === "admin" ? [] : [user.id];
     const applications = db.prepare(`SELECT a.*,u.name candidate_name,j.title job_title,j.company FROM applications a JOIN users u ON u.id=a.candidate_id JOIN jobs j ON j.id=a.job_id WHERE ${where} ORDER BY a.applied_at DESC`).all(...args);
     return json(res, 200, { applications });
+  }
+  params = route("/api/applications/:id/withdraw", pathname);
+  if (req.method === "PATCH" && params) {
+    const user = requireUser(req, res, ["candidate"]); if (!user) return;
+    const application = db.prepare("SELECT * FROM applications WHERE id=? AND candidate_id=?").get(Number(params.id), user.id);
+    if (!application) return fail(res, 404, "Không tìm thấy hồ sơ", "NOT_FOUND");
+    if (application.withdrawn_at || application.status !== "Da nop") return fail(res, 409, "Chỉ có thể rút hồ sơ khi còn ở trạng thái Đã nộp", "WITHDRAW_NOT_ALLOWED");
+    db.prepare("UPDATE applications SET withdrawn_at=datetime('now'),updated_at=datetime('now') WHERE id=?").run(application.id);
+    return json(res, 200, { application: db.prepare("SELECT * FROM applications WHERE id=?").get(application.id) });
   }
   params = route("/api/applications/:id/status", pathname);
   if (req.method === "PATCH" && params) {
@@ -143,7 +222,7 @@ async function api(req, res, url) {
     const d = await body(req);
     if (!["Da nop", "Len lich phong van", "Da tuyen", "Tu choi"].includes(d.status)) return fail(res, 422, "Trạng thái không hợp lệ", "VALIDATION_ERROR");
     const owner = user.role === "admin" ? "" : " AND job_id IN (SELECT id FROM jobs WHERE employer_id=?)";
-    const result = db.prepare(`UPDATE applications SET status=?,updated_at=datetime('now') WHERE id=?${owner}`).run(d.status, Number(params.id), ...(user.role === "admin" ? [] : [user.id]));
+    const result = db.prepare(`UPDATE applications SET status=?,updated_at=datetime('now') WHERE id=? AND withdrawn_at IS NULL${owner}`).run(d.status, Number(params.id), ...(user.role === "admin" ? [] : [user.id]));
     if (!result.changes) return fail(res, 404, "Không tìm thấy hồ sơ", "NOT_FOUND");
     return json(res, 200, { application: db.prepare("SELECT * FROM applications WHERE id=?").get(Number(params.id)) });
   }
