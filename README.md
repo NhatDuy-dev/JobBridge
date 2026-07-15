@@ -33,3 +33,10 @@ Tài khoản mẫu (mật khẩu `123`):
 Gửi token qua header `Authorization: Bearer <token>`. Lỗi có cấu trúc `{ "error": { "code", "message" } }`.
 
 Schema đầy đủ nằm trong `database/schema.sql`.
+
+## Kiểm tra Admin
+
+Đăng nhập bằng tài khoản:
+
+- Email: admin@test.com
+- Mật khẩu: 123
