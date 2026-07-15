@@ -142,6 +142,11 @@ function handleLogin(event) {
     return;
   }
 
+  if (user.locked) {
+    showInlineMessage("#authMessage", "Tài khoản đã bị quản trị viên khóa.", "error");
+    return;
+  }
+
   appState.currentUser = createSessionUser(user);
   writeStorage(STORAGE_KEYS.session, appState.currentUser);
   renderDashboard();
@@ -205,6 +210,11 @@ function loginDemoAccount(email) {
   const user = appState.users.find((item) => item.email.toLowerCase() === email.toLowerCase());
   if (!user) {
     showInlineMessage("#authMessage", "Không tìm thấy tài khoản mẫu.", "error");
+    return;
+  }
+
+  if (user.locked) {
+    showInlineMessage("#authMessage", "Tài khoản đã bị quản trị viên khóa.", "error");
     return;
   }
 
