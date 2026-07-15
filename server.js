@@ -1,5 +1,4 @@
-import http from "node:http";
-import fs from "node:fs";
+import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
@@ -15,6 +14,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const db = openDatabase(process.env.DB_PATH || undefined);
 const port = Number(process.env.PORT || 3000);
 const SESSION_DAYS = 7;
+const app = express();
 
 function ensureAdminSchema() {
   const userColumns = new Set(
@@ -143,19 +143,14 @@ if (existingAdminLogCount === 0) {
 ensureAdminSchema();
 
 const json = (res, status, data) => {
+  res.status(status).set("Cache-Control", "no-store");
+
   if (status === 204) {
-    res.writeHead(204, {
-      "Cache-Control": "no-store",
-    });
     res.end();
     return;
   }
 
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-  });
-  res.end(JSON.stringify(data));
+  res.json(data);
 };
 
 const fail = (
@@ -166,29 +161,7 @@ const fail = (
 ) => json(res, status, { error: { code, message } });
 
 const body = async (req) => {
-  let raw = "";
-
-  for await (const chunk of req) {
-    raw += chunk;
-
-    if (raw.length > 1_000_000) {
-      throw Object.assign(new Error("Dữ liệu quá lớn"), {
-        status: 413,
-      });
-    }
-  }
-
-  if (!raw) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw Object.assign(new Error("JSON không hợp lệ"), {
-      status: 400,
-    });
-  }
+  return req.body || {};
 };
 
 const route = (pattern, pathname) => {
@@ -2739,65 +2712,62 @@ ORDER BY application.created_at DESC
   );
 }
 
-function staticFile(req, res, pathname) {
-  const alias = pathname === "/" ? "/html/index.html" : pathname;
-  const file = path.resolve(root, `.${alias}`);
+app.use(express.json({ limit: 1_000_000 }));
 
-  if (
-    !file.startsWith(root) ||
-    !fs.existsSync(file) ||
-    !fs.statSync(file).isFile()
-  ) {
-    return fail(
-      res,
-      404,
-      "Không tìm thấy tài nguyên",
-      "NOT_FOUND",
-    );
-  }
-
-  const contentType = {
-    ".html": "text/html; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".png": "image/png",
-  }[path.extname(file)] || "application/octet-stream";
-
-  res.writeHead(200, {
-    "Content-Type": contentType,
-  });
-
-  fs.createReadStream(file).pipe(res);
-}
-
-const server = http.createServer(async (req, res) => {
+app.use("/api", async (req, res, next) => {
   const url = new URL(
-    req.url,
+    req.originalUrl,
     `http://${req.headers.host || "localhost"}`,
   );
 
   try {
-    if (url.pathname.startsWith("/api/")) {
-      await api(req, res, url);
-    } else {
-      staticFile(req, res, url.pathname);
-    }
+    await api(req, res, url);
   } catch (error) {
-    console.error(error);
-
-    if (!res.headersSent) {
-      fail(
-        res,
-        error.status || 500,
-        error.status ? error.message : "Lỗi máy chủ",
-        "INTERNAL_ERROR",
-      );
-    }
+    next(error);
   }
 });
 
-server.listen(port, () => {
+app.get("/", (req, res) => {
+  res.sendFile(path.join(root, "html", "index.html"));
+});
+
+for (const directory of ["assets", "css", "html", "js"]) {
+  app.use(
+    `/${directory}`,
+    express.static(path.join(root, directory), { index: false }),
+  );
+}
+
+app.use((req, res) => {
+  fail(
+    res,
+    404,
+    "Không tìm thấy tài nguyên",
+    "NOT_FOUND",
+  );
+});
+
+app.use((error, req, res, next) => {
+  console.error(error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  const status = error.status || 500;
+  let message = status < 500 ? error.message : "Lỗi máy chủ";
+
+  if (error.type === "entity.too.large") {
+    message = "Dữ liệu quá lớn";
+  } else if (error.type === "entity.parse.failed") {
+    message = "JSON không hợp lệ";
+  }
+
+  return fail(res, status, message, "INTERNAL_ERROR");
+});
+
+const server = app.listen(port, () => {
   console.log(`JobBridge: http://localhost:${port}`);
 });
 
-export { server, db };
+export { app, server, db };
