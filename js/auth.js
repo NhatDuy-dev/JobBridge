@@ -142,6 +142,11 @@ function handleLogin(event) {
     return;
   }
 
+  if (user.locked) {
+    showInlineMessage("#authMessage", "Tài khoản đã bị quản trị viên khóa.", "error");
+    return;
+  }
+
   appState.currentUser = createSessionUser(user);
   writeStorage(STORAGE_KEYS.session, appState.currentUser);
   renderDashboard();
@@ -208,6 +213,11 @@ function loginDemoAccount(email) {
     return;
   }
 
+  if (user.locked) {
+    showInlineMessage("#authMessage", "Tài khoản đã bị quản trị viên khóa.", "error");
+    return;
+  }
+
   appState.currentUser = createSessionUser(user);
   writeStorage(STORAGE_KEYS.session, appState.currentUser);
   renderDashboard();
@@ -223,6 +233,7 @@ function isValidEmail(email) {
 
 function logout() {
   stopRealtimeUpdates();
+  if (typeof clearApiToken === "function") clearApiToken();
   localStorage.removeItem(STORAGE_KEYS.session);
   appState.currentUser = null;
   appState.authMode = "login";
