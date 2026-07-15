@@ -2,5 +2,7 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 .env
+auth_service/.env
+auth_service/.venv/
+auth_service/__pycache__/
 node_modules/
-

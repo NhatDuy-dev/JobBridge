@@ -1,4 +1,5 @@
 // Xác thực dùng chung cho candidate, employer và admin.
+const AUTH_SERVICE_URL = window.JOBBRIDGE_AUTH_SERVICE_URL || "http://localhost:8000";
 function renderLogin() {
   const isRegister = appState.authMode === "register";
 
@@ -163,7 +164,7 @@ function bindAuthScreen() {
   document.querySelector("#registerForm")?.addEventListener("submit", handleRegister);
 
   document.querySelectorAll("[data-oauth-provider]").forEach((button) => {
-    button.addEventListener("click", () => window.location.assign(`/api/auth/oauth/${button.dataset.oauthProvider}`));
+    button.addEventListener("click", () => window.location.assign(`${AUTH_SERVICE_URL}/auth/oauth/${button.dataset.oauthProvider}`));
   });
 
   document.querySelector("[data-phone-login-toggle]")?.addEventListener("click", (event) => {
@@ -188,7 +189,7 @@ async function handlePhoneLogin(event) {
   }
   try {
     if (otpStep.hidden) {
-      const result = await authApi("/api/auth/phone/send-otp", { phone });
+      const result = await authApi("/auth/phone/send-otp", { phone });
       otpStep.hidden = false;
       panel.querySelector("[data-send-otp]").hidden = true;
       phoneInput.readOnly = true;
@@ -196,7 +197,7 @@ async function handlePhoneLogin(event) {
       otpInput.focus();
       return;
     }
-    const result = await authApi("/api/auth/phone/verify-otp", { phone, otp: otpInput.value.trim() });
+    const result = await authApi("/auth/phone/verify-otp", { phone, otp: otpInput.value.trim() });
     completeApiLogin(result);
   } catch (error) {
     showInlineMessage("#phoneAuthMessage", error.message, "error");
@@ -204,16 +205,36 @@ async function handlePhoneLogin(event) {
 }
 
 async function authApi(path, payload) {
-  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const response = await fetch(`${AUTH_SERVICE_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error?.message || "Không thể kết nối máy chủ xác thực.");
   return result;
 }
 
+async function consumeOAuthCallback() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("auth_code");
+  if (!code) return false;
+  url.searchParams.delete("auth_code");
+  history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  try {
+    const response = await fetch(`${AUTH_SERVICE_URL}/auth/exchange/${encodeURIComponent(code)}`, { method: "POST" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "Không thể hoàn tất đăng nhập OAuth.");
+    completeApiLogin(result);
+    return true;
+  } catch (error) {
+    renderLogin();
+    showInlineMessage("#authMessage", error.message, "error");
+    return true;
+  }
+}
+
 function completeApiLogin(result) {
-  const user = normalizeUser({ ...result.user, password: "" });
-  const index = appState.users.findIndex((item) => Number(item.id) === Number(user.id));
-  if (index >= 0) appState.users[index] = { ...appState.users[index], ...user };
+  const index = appState.users.findIndex((item) => Number(item.id) === Number(result.user.id));
+  const existingUser = index >= 0 ? appState.users[index] : {};
+  const user = normalizeUser({ ...existingUser, ...result.user });
+  if (index >= 0) appState.users[index] = user;
   else appState.users.push(user);
   appState.currentUser = createSessionUser(user);
   writeStorage(STORAGE_KEYS.users, appState.users);
@@ -222,27 +243,25 @@ function completeApiLogin(result) {
   renderDashboard();
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const email = document.querySelector("#loginEmail").value.trim().toLowerCase();
   const password = document.querySelector("#loginPassword").value;
-  const user = appState.users.find(
-    (item) => item.email.toLowerCase() === email && item.password === password,
-  );
-
-  if (!user) {
-    showInlineMessage("#authMessage", "Email hoặc mật khẩu không đúng.", "error");
-    return;
+  if (!email || !password) return showInlineMessage("#authMessage", "Vui lòng nhập email và mật khẩu.", "error");
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error?.message || "Email hoặc mật khẩu không đúng.");
+    const localUser = appState.users.find((item) => item.email.toLowerCase() === email);
+    if (localUser) localUser.password = password;
+    completeApiLogin(result);
+  } catch (error) {
+    showInlineMessage("#authMessage", error.message, "error");
   }
-
-  if (user.locked) {
-    showInlineMessage("#authMessage", "Tài khoản đã bị quản trị viên khóa.", "error");
-    return;
-  }
-
-  appState.currentUser = createSessionUser(user);
-  writeStorage(STORAGE_KEYS.session, appState.currentUser);
-  renderDashboard();
 }
 
 function handleRegister(event) {
