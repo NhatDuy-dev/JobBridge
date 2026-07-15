@@ -63,6 +63,9 @@ function renderCompanyApplications() {
       renderCompanyApplications();
     });
   });
+  content.querySelectorAll("[data-application-cv]").forEach((button) => {
+    button.addEventListener("click", () => openCompanyApplicationCv(button.dataset.applicationCv));
+  });
   content.querySelectorAll("[data-application-detail]").forEach((button) => button.addEventListener("click", () => openCompanyApplicationDetail(button.dataset.applicationDetail)));
 }
 
@@ -81,7 +84,10 @@ function renderCompanyApplicationTable(applications) {
               <td data-label="Vị trí"><strong>${escapeHtml(job?.title || application.jobTitle || "Tin tuyển dụng")}</strong><small class="company-cell-secondary">${escapeHtml(application.cvName || "CV ứng tuyển")}</small></td>
               <td data-label="Ngày nộp"><time>${escapeHtml(formatDate(application.appliedAt))}</time></td>
               <td data-label="Trạng thái"><div class="company-application-status-cell">${companyStatusBadge(application.status, "application")}${statusDetail ? `<small>${escapeHtml(statusDetail)}</small>` : ""}</div></td>
-              <td class="company-table-action-single"><button class="company-button company-button-secondary company-button-small" data-application-detail="${application.id}" type="button">${companyIcon("eye")}Xem hồ sơ</button></td>
+              <td class="company-table-actions">
+                <button class="company-button company-button-secondary company-button-small" data-application-cv="${application.id}" type="button">${companyIcon("file")}Xem CV</button>
+                <button class="company-button company-button-secondary company-button-small" data-application-detail="${application.id}" type="button">${companyIcon("eye")}Xem hồ sơ</button>
+              </td>
             </tr>
           `;
         }).join("")}</tbody>
@@ -98,6 +104,7 @@ function openCompanyApplicationDetail(applicationId) {
   }
   const job = companyFindJob(application.jobId);
   const candidate = companyFindCandidate(application.candidateId);
+  const cv = companyFindApplicationCv(application);
   const modal = companyOpenModal(`
     <header class="company-modal-header">
       <div><p>Chi tiết hồ sơ</p><h2>${escapeHtml(application.candidateName || candidate?.name || "Ứng viên")}</h2></div>
@@ -112,12 +119,14 @@ function openCompanyApplicationDetail(applicationId) {
         <section class="company-detail-section"><h3>Thông tin ứng tuyển</h3><dl><div><dt>Vị trí</dt><dd>${escapeHtml(job?.title || application.jobTitle || "Tin tuyển dụng")}</dd></div><div><dt>Ngày nộp</dt><dd>${escapeHtml(formatDate(application.appliedAt))}</dd></div><div><dt>CV đã chọn</dt><dd>${escapeHtml(application.cvName || "CV ứng tuyển")}</dd></div></dl></section>
         <section class="company-detail-section"><h3>Năng lực ứng viên</h3><dl><div><dt>Kinh nghiệm</dt><dd>${escapeHtml(candidate?.experienceLevel || "Chưa cập nhật")}</dd></div><div><dt>Học vấn</dt><dd>${escapeHtml(candidate?.education || "Chưa cập nhật")}</dd></div><div><dt>Kỹ năng</dt><dd>${escapeHtml(candidate?.skills?.join(", ") || "Chưa cập nhật")}</dd></div></dl></section>
       </div>
+      ${renderCompanyCvAttachment(application, cv)}
       <section class="company-cover-letter"><h3>Thư giới thiệu</h3><p>${escapeHtml(application.coverLetter || "Ứng viên chưa gửi thư giới thiệu.")}</p></section>
       ${renderCompanyInterviewSummary(application)}
       ${renderCompanyRecruitmentActions(application)}
     </div>
   `, "company-modal-large");
 
+  modal.querySelector("[data-company-view-cv]")?.addEventListener("click", () => openCompanyApplicationCv(application.id));
   modal.querySelectorAll("[data-company-show-form]").forEach((button) => {
     button.addEventListener("click", () => showCompanyApplicationForm(modal, button.dataset.companyShowForm));
   });
@@ -133,6 +142,138 @@ function openCompanyApplicationDetail(applicationId) {
     rejectCompanyApplication(application.id, new FormData(event.currentTarget));
   });
   modal.querySelector("[data-company-hire]")?.addEventListener("click", () => hireCompanyApplication(application.id));
+}
+
+function companyFindApplicationCv(application) {
+  if (!application?.cvId) return null;
+  return appState.cvs.find((cv) => (
+    Number(cv.id) === Number(application.cvId)
+    && Number(cv.candidateId) === Number(application.candidateId)
+  )) || null;
+}
+
+function renderCompanyCvAttachment(application, cv) {
+  const isUploadedPdf = cv?.source === "upload";
+  const typeLabel = isUploadedPdf ? "Tệp PDF" : "CV tạo từ hồ sơ JobBridge";
+  const fileDetail = isUploadedPdf && cv.fileSize ? ` · ${companyFormatFileSize(cv.fileSize)}` : "";
+  return `
+    <section class="company-cv-attachment">
+      <span class="company-cv-attachment-icon">${companyIcon("file")}</span>
+      <div>
+        <h3>${escapeHtml(cv?.name || application.cvName || "CV ứng tuyển")}</h3>
+        <p>${escapeHtml(`${typeLabel}${fileDetail}`)}</p>
+      </div>
+      <button class="company-button company-button-primary" data-company-view-cv type="button">${companyIcon("eye")}Xem CV</button>
+    </section>
+  `;
+}
+
+function openCompanyApplicationCv(applicationId) {
+  const application = companyApplications().find((item) => Number(item.id) === Number(applicationId));
+  if (!application) {
+    showCompanyToast("Không tìm thấy CV trong hồ sơ thuộc công ty.", "error");
+    return;
+  }
+
+  const candidate = companyFindCandidate(application.candidateId);
+  const cv = companyFindApplicationCv(application);
+  if (cv?.source === "upload") {
+    openCompanyUploadedCv(cv);
+    return;
+  }
+
+  openCompanyProfileCv(application, cv, candidate);
+}
+
+async function openCompanyUploadedCv(cv) {
+  const previewWindow = window.open("", "_blank");
+  try {
+    const file = await companyReadCvFile(cv.id);
+    if (!file) throw new Error("CV file missing");
+    const url = URL.createObjectURL(file);
+    if (!previewWindow) {
+      URL.revokeObjectURL(url);
+      showCompanyToast("Trình duyệt đang chặn cửa sổ đọc CV.", "error");
+      return;
+    }
+    previewWindow.location.href = url;
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    previewWindow?.close();
+    showCompanyToast("Không tìm thấy tệp PDF của CV này.", "error");
+  }
+}
+
+function companyReadCvFile(cvId) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CV_FILE_DATABASE, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(CV_FILE_STORE)) {
+        request.result.createObjectStore(CV_FILE_STORE, { keyPath: "id" });
+      }
+    };
+    request.onerror = () => reject(request.error || new Error("Không thể mở kho CV."));
+    request.onsuccess = () => {
+      const database = request.result;
+      const readRequest = database.transaction(CV_FILE_STORE, "readonly").objectStore(CV_FILE_STORE).get(Number(cvId));
+      readRequest.onsuccess = () => {
+        database.close();
+        resolve(readRequest.result?.file || null);
+      };
+      readRequest.onerror = () => {
+        database.close();
+        reject(readRequest.error || new Error("Không thể đọc CV."));
+      };
+    };
+  });
+}
+
+function openCompanyProfileCv(application, cv, candidate) {
+  const profile = { ...(candidate || {}), ...(cv?.profileSnapshot || {}) };
+  const job = companyFindJob(application.jobId);
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+  const modal = companyOpenModal(`
+    <header class="company-modal-header company-cv-modal-header">
+      <div><p>CV ứng tuyển</p><h2>${escapeHtml(cv?.name || application.cvName || "CV ứng viên")}</h2></div>
+      <div class="company-cv-header-actions">
+        <button class="company-button company-button-secondary company-button-small" data-company-back-application type="button">${companyIcon("arrow")}Quay lại hồ sơ</button>
+        <button class="company-icon-button" data-company-modal-close type="button" aria-label="Đóng">${companyIcon("close")}</button>
+      </div>
+    </header>
+    <div class="company-cv-reader">
+      <article class="company-cv-sheet">
+        <header class="company-cv-identity">
+          <span class="company-avatar company-avatar-large">${escapeHtml(getInitials(profile.name || application.candidateName || "UV"))}</span>
+          <div><h1>${escapeHtml(profile.name || application.candidateName || "Ứng viên")}</h1><p>${escapeHtml(profile.desiredTitle || job?.title || "Ứng viên JobBridge")}</p></div>
+        </header>
+        <div class="company-cv-content">
+          <aside class="company-cv-sidebar">
+            <section><h3>Thông tin liên hệ</h3><dl>
+              <div><dt>Email</dt><dd>${escapeHtml(profile.email || "Chưa cập nhật")}</dd></div>
+              <div><dt>Điện thoại</dt><dd>${escapeHtml(profile.phone || "Chưa cập nhật")}</dd></div>
+              <div><dt>Địa điểm</dt><dd>${escapeHtml(profile.location || "Chưa cập nhật")}</dd></div>
+              <div><dt>Portfolio</dt><dd>${escapeHtml(profile.portfolio || "Chưa cập nhật")}</dd></div>
+            </dl></section>
+            <section><h3>Kỹ năng</h3>${skills.length ? `<ul class="company-cv-skills">${skills.map((skill) => `<li>${escapeHtml(skill)}</li>`).join("")}</ul>` : `<p>Chưa cập nhật kỹ năng.</p>`}</section>
+          </aside>
+          <main class="company-cv-main">
+            <section><h3>Giới thiệu</h3><p>${escapeHtml(profile.summary || "Ứng viên chưa cập nhật phần giới thiệu.")}</p></section>
+            <section><h3>Kinh nghiệm</h3><p>${escapeHtml(profile.experienceLevel || "Chưa cập nhật kinh nghiệm.")}</p></section>
+            <section><h3>Học vấn</h3><p>${escapeHtml(profile.education || "Chưa cập nhật học vấn.")}</p></section>
+            <section><h3>Vị trí ứng tuyển</h3><p><strong>${escapeHtml(job?.title || application.jobTitle || "Tin tuyển dụng")}</strong></p><small>Nộp ngày ${escapeHtml(formatDate(application.appliedAt))}</small></section>
+          </main>
+        </div>
+      </article>
+    </div>
+  `, "company-modal-cv");
+
+  modal.querySelector("[data-company-back-application]")?.addEventListener("click", () => openCompanyApplicationDetail(application.id));
+}
+
+function companyFormatFileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function renderCompanyInterviewSummary(application) {
@@ -263,9 +404,48 @@ function updateCompanyApplication(applicationId, changes, successMessage) {
   const updatedAt = new Date().toISOString();
   appState.applications = appState.applications.map((application) => Number(application.id) === Number(ownedApplication.id) ? { ...application, ...changes, updatedAt } : application);
   companyPersistApplications();
+  createCandidateApplicationNotification({ ...ownedApplication, ...changes, updatedAt });
   companyCloseModal();
   renderCompanyTabContent();
   showCompanyToast(successMessage, "success");
+}
+
+function createCandidateApplicationNotification(application) {
+  const job = companyFindJob(application.jobId);
+  const companyName = job?.company || companyDisplayName();
+  const jobTitle = job?.title || application.jobTitle || "vị trí đã ứng tuyển";
+  const notificationByStatus = {
+    "Len lich phong van": {
+      type: "interview",
+      title: "Bạn có lịch phỏng vấn mới",
+      message: `${companyName} đã mời bạn phỏng vấn vị trí ${jobTitle}.`,
+    },
+    "Da tuyen": {
+      type: "hired",
+      title: "Chúc mừng, bạn đã được tuyển!",
+      message: `${companyName} đã chọn bạn cho vị trí ${jobTitle}.`,
+    },
+    "Tu choi": {
+      type: "rejected",
+      title: "Cập nhật kết quả ứng tuyển",
+      message: `${companyName} đã cập nhật kết quả cho vị trí ${jobTitle}.`,
+    },
+  };
+  const content = notificationByStatus[application.status];
+  if (!content) return;
+
+  const now = new Date().toISOString();
+  const notification = normalizeNotification({
+    id: Math.max(0, ...appState.notifications.map((item) => Number(item.id) || 0)) + 1,
+    candidateId: application.candidateId,
+    applicationId: application.id,
+    jobId: application.jobId,
+    ...content,
+    createdAt: now,
+    readAt: null,
+  });
+  appState.notifications.unshift(notification);
+  writeStorage(STORAGE_KEYS.notifications, appState.notifications);
 }
 
 function companyApplicationStatusDetail(application) {

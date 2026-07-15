@@ -227,6 +227,17 @@ function renderCandidateView() {
           </div>
           <div id="savedJobGrid" class="job-grid"></div>
         </section>
+
+        <section class="candidate-tab-panel ${appState.candidateTab === "notifications" ? "active" : ""}" data-candidate-panel="notifications">
+          <div class="candidate-panel-heading notification-page-heading">
+            <div>
+              <p class="eyebrow">Notifications</p>
+              <h2>Thông báo của bạn</h2>
+            </div>
+            <button class="notification-mark-all" data-notification-mark-all type="button">Đánh dấu tất cả đã đọc</button>
+          </div>
+          <div id="candidateNotificationList" class="candidate-notification-list"></div>
+        </section>
       </div>
     </section>
   `;
@@ -238,8 +249,159 @@ function renderCandidateView() {
   renderCandidateJobs();
   renderCandidateHistory();
   renderSavedJobs();
+  renderCandidateNotifications();
   bindCandidateJobCardActions(document.querySelector("#dashboardRoot"));
   syncCandidateTabButtons();
+}
+
+function getCandidateNotifications() {
+  const candidateId = Number(appState.currentUser?.id);
+  return appState.notifications
+    .filter((notification) => Number(notification.candidateId) === candidateId)
+    .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
+}
+
+function getCandidateUnreadNotificationCount() {
+  if (appState.currentUser?.role !== "candidate") return 0;
+  return getCandidateNotifications().filter((notification) => !notification.readAt).length;
+}
+
+function renderCandidateNotificationPopover() {
+  const notifications = getCandidateNotifications().slice(0, 5);
+  const unreadCount = getCandidateUnreadNotificationCount();
+  return `
+    <section id="candidateNotificationPopover" class="candidate-notification-popover" aria-label="Thông báo của ứng viên" hidden>
+      <header>
+        <div><strong>Thông báo</strong><span>${unreadCount ? `${unreadCount} chưa đọc` : "Đã đọc tất cả"}</span></div>
+        ${unreadCount ? '<button data-notification-mark-all type="button">Đọc tất cả</button>' : ""}
+      </header>
+      <div class="notification-popover-list">
+        ${notifications.length ? notifications.map(renderCandidateNotificationItem).join("") : '<div class="notification-empty"><strong>Chưa có thông báo</strong><span>Cập nhật từ nhà tuyển dụng sẽ xuất hiện tại đây.</span></div>'}
+      </div>
+      <button class="notification-view-all" data-notification-view-all type="button">Xem tất cả thông báo</button>
+    </section>
+  `;
+}
+
+function renderCandidateNotificationItem(notification, full = false) {
+  const application = appState.applications.find((item) => Number(item.id) === Number(notification.applicationId));
+  const detail = getCandidateNotificationDetail(notification, application);
+  return `
+    <article class="candidate-notification-item ${notification.readAt ? "" : "is-unread"}" data-notification-id="${notification.id}">
+      <span class="notification-type-icon notification-type-${escapeHtml(notification.type)}" aria-hidden="true">${getCandidateNotificationSymbol(notification.type)}</span>
+      <div class="notification-item-content">
+        <div class="notification-item-title"><strong>${escapeHtml(notification.title)}</strong>${notification.readAt ? "" : '<span aria-label="Chưa đọc"></span>'}</div>
+        <p>${escapeHtml(notification.message)}</p>
+        ${full && detail ? `<div class="notification-detail">${detail}</div>` : ""}
+        <time datetime="${escapeHtml(notification.createdAt)}">${escapeHtml(formatCandidateNotificationTime(notification.createdAt))}</time>
+      </div>
+      ${full ? `<button class="notification-open-application" data-notification-open="${notification.id}" type="button">Xem hồ sơ</button>` : ""}
+    </article>
+  `;
+}
+
+function getCandidateNotificationDetail(notification, application) {
+  if (!application) return "";
+  if (notification.type === "interview" && application.interviewAt) {
+    const interviewAt = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(application.interviewAt));
+    return `<strong>${escapeHtml(interviewAt)}</strong><span>${escapeHtml(application.interviewMethod || "Phỏng vấn")} · ${escapeHtml(application.interviewLocation || "Địa điểm sẽ được cập nhật")}</span>${application.interviewNote ? `<span>Lưu ý: ${escapeHtml(application.interviewNote)}</span>` : ""}`;
+  }
+  if (notification.type === "rejected" && application.rejectionReason) return `<span>${escapeHtml(application.rejectionReason)}</span>`;
+  if (notification.type === "hired") return "<span>Nhà tuyển dụng sẽ liên hệ với bạn để trao đổi các bước tiếp theo.</span>";
+  return "";
+}
+
+function getCandidateNotificationSymbol(type) {
+  if (type === "interview") return "📅";
+  if (type === "hired") return "✓";
+  if (type === "rejected") return "i";
+  return "•";
+}
+
+function formatCandidateNotificationTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Vừa xong";
+  const elapsed = Date.now() - date.getTime();
+  if (elapsed >= 0 && elapsed < 60 * 60 * 1000) return `${Math.max(1, Math.floor(elapsed / 60000))} phút trước`;
+  if (elapsed >= 0 && elapsed < 24 * 60 * 60 * 1000) return `${Math.floor(elapsed / 3600000)} giờ trước`;
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function persistCandidateNotifications() {
+  writeStorage(STORAGE_KEYS.notifications, appState.notifications);
+}
+
+function markCandidateNotificationRead(notificationId) {
+  const notification = appState.notifications.find((item) => Number(item.id) === Number(notificationId) && Number(item.candidateId) === Number(appState.currentUser.id));
+  if (!notification || notification.readAt) return;
+  notification.readAt = new Date().toISOString();
+  persistCandidateNotifications();
+}
+
+function markAllCandidateNotificationsRead() {
+  const now = new Date().toISOString();
+  let changed = false;
+  appState.notifications.forEach((notification) => {
+    if (Number(notification.candidateId) === Number(appState.currentUser.id) && !notification.readAt) {
+      notification.readAt = now;
+      changed = true;
+    }
+  });
+  if (changed) persistCandidateNotifications();
+}
+
+function renderCandidateNotifications() {
+  const root = document.querySelector("#candidateNotificationList");
+  if (!root) return;
+  const notifications = getCandidateNotifications();
+  root.innerHTML = notifications.length
+    ? notifications.map((notification) => renderCandidateNotificationItem(notification, true)).join("")
+    : '<div class="empty-state"><strong>Bạn chưa có thông báo nào.</strong><span>Khi nhà tuyển dụng xử lý hồ sơ, JobBridge sẽ cập nhật tại đây.</span></div>';
+  root.querySelectorAll("[data-notification-open]").forEach((button) => button.addEventListener("click", () => openCandidateNotificationApplication(button.dataset.notificationOpen)));
+  document.querySelector("[data-candidate-panel=\"notifications\"] [data-notification-mark-all]")?.addEventListener("click", () => {
+    markAllCandidateNotificationsRead();
+    appState.candidateTab = "notifications";
+    renderDashboard();
+  });
+}
+
+function openCandidateNotificationApplication(notificationId) {
+  markCandidateNotificationRead(notificationId);
+  appState.candidateTab = "history";
+  renderDashboard();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function bindCandidateNotificationCenter() {
+  const button = document.querySelector("#candidateNotificationButton");
+  const popover = document.querySelector("#candidateNotificationPopover");
+  if (!button || !popover) return;
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const willOpen = popover.hidden;
+    popover.hidden = !willOpen;
+    button.setAttribute("aria-expanded", String(willOpen));
+    const accountMenu = document.querySelector("#candidateAccountMenu");
+    if (accountMenu) accountMenu.hidden = true;
+  });
+  popover.addEventListener("click", (event) => event.stopPropagation());
+  popover.querySelector("[data-notification-mark-all]")?.addEventListener("click", () => {
+    markAllCandidateNotificationsRead();
+    renderDashboard();
+  });
+  popover.querySelector("[data-notification-view-all]")?.addEventListener("click", () => {
+    appState.candidateTab = "notifications";
+    renderCandidateView();
+    popover.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  });
+  popover.querySelectorAll("[data-notification-id]").forEach((item) => item.addEventListener("click", () => {
+    openCandidateNotificationApplication(item.dataset.notificationId);
+  }));
+  document.addEventListener("click", () => {
+    popover.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  });
 }
 
 function renderCareerCategoryRail() {

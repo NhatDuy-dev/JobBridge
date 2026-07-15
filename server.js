@@ -188,6 +188,18 @@ const route = (pattern, pathname) => {
   );
 };
 
+const mapNotification = (notification) => ({
+  id: notification.id,
+  candidateId: notification.candidate_id,
+  applicationId: notification.application_id,
+  jobId: notification.job_id,
+  type: notification.type,
+  title: notification.title,
+  message: notification.message,
+  readAt: notification.read_at,
+  createdAt: notification.created_at,
+});
+
 const userByToken = (req) => {
   const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
 
@@ -2487,41 +2499,17 @@ writeAdminLog({
       );
     }
 
-    const ownerConstraint =
-      user.role === "admin"
-        ? ""
-        : " AND job_id IN (SELECT id FROM jobs WHERE employer_id = ?)";
+    const applicationId = Number(params.id);
+    const ownerConstraint = user.role === "admin" ? "" : " AND j.employer_id = ?";
+    const oldApplication = db.prepare(`
+      SELECT a.*, u.name AS candidate_name, j.title AS job_title, j.company
+      FROM applications a
+      JOIN users u ON u.id = a.candidate_id
+      JOIN jobs j ON j.id = a.job_id
+      WHERE a.id = ?${ownerConstraint}
+    `).get(applicationId, ...(user.role === "admin" ? [] : [user.id]));
 
-    const result = db.prepare(`
-      UPDATE applications
-      
-      SET
-        status = ?,
-        updated_at = datetime('now')
-      WHERE id = ?${ownerConstraint}
-    `).run(
-      data.status,
-      Number(params.id),
-      ...(user.role === "admin" ? [] : [user.id]),
-    );
-writeAdminLog({
-  adminId: admin.id,
-  action: "UPDATE_APPLICATION",
-  entityType: "Application",
-  entityId: applicationId,
-
-  oldValue: {
-    status: oldApplication.status,
-  },
-
-  newValue: {
-    status: nextStatus,
-  },
-
-  note:
-    `Cập nhật hồ sơ của ${oldApplication.candidate_name} cho vị trí ${oldApplication.job_title}: ${oldApplication.status} → ${nextStatus}`,
-});
-    if (!result.changes) {
+    if (!oldApplication) {
       return fail(
         res,
         404,
@@ -2530,13 +2518,107 @@ writeAdminLog({
       );
     }
 
+    const notificationContent = {
+      "Len lich phong van": {
+        type: "interview",
+        title: "Bạn có lịch phỏng vấn mới",
+        message: `${oldApplication.company} đã mời bạn phỏng vấn vị trí ${oldApplication.job_title}.`,
+      },
+      "Da tuyen": {
+        type: "hired",
+        title: "Chúc mừng, bạn đã được tuyển!",
+        message: `${oldApplication.company} đã chọn bạn cho vị trí ${oldApplication.job_title}.`,
+      },
+      "Tu choi": {
+        type: "rejected",
+        title: "Cập nhật kết quả ứng tuyển",
+        message: `${oldApplication.company} đã cập nhật kết quả cho vị trí ${oldApplication.job_title}.`,
+      },
+    }[data.status];
+
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare(`
+        UPDATE applications
+        SET status = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(data.status, applicationId);
+
+      if (notificationContent && oldApplication.status !== data.status) {
+        db.prepare(`
+          INSERT INTO notifications(candidate_id, application_id, job_id, type, title, message)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(
+          oldApplication.candidate_id,
+          applicationId,
+          oldApplication.job_id,
+          notificationContent.type,
+          notificationContent.title,
+          notificationContent.message,
+        );
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+
+    if (user.role === "admin") {
+      writeAdminLog({
+        adminId: user.id,
+        action: "UPDATE_APPLICATION",
+        entityType: "Application",
+        entityId: applicationId,
+        oldValue: { status: oldApplication.status },
+        newValue: { status: data.status },
+        note: `Cập nhật hồ sơ của ${oldApplication.candidate_name} cho vị trí ${oldApplication.job_title}: ${oldApplication.status} → ${data.status}`,
+      });
+    }
+
     const application = db.prepare(`
       SELECT *
       FROM applications
       WHERE id = ?
-    `).get(Number(params.id));
+    `).get(applicationId);
 
     return json(res, 200, { application });
+  }
+
+  if (req.method === "GET" && pathname === "/api/notifications") {
+    const user = requireUser(req, res, ["candidate"]);
+    if (!user) return;
+    const notifications = db.prepare(`
+      SELECT * FROM notifications
+      WHERE candidate_id = ?
+      ORDER BY created_at DESC, id DESC
+    `).all(user.id).map(mapNotification);
+    return json(res, 200, {
+      notifications,
+      unreadCount: notifications.filter((notification) => !notification.readAt).length,
+    });
+  }
+
+  if (req.method === "PATCH" && pathname === "/api/notifications/read-all") {
+    const user = requireUser(req, res, ["candidate"]);
+    if (!user) return;
+    const result = db.prepare(`
+      UPDATE notifications SET read_at = datetime('now')
+      WHERE candidate_id = ? AND read_at IS NULL
+    `).run(user.id);
+    return json(res, 200, { updated: result.changes });
+  }
+
+  params = route("/api/notifications/:id/read", pathname);
+  if (req.method === "PATCH" && params) {
+    const user = requireUser(req, res, ["candidate"]);
+    if (!user) return;
+    const result = db.prepare(`
+      UPDATE notifications SET read_at = COALESCE(read_at, datetime('now'))
+      WHERE id = ? AND candidate_id = ?
+    `).run(Number(params.id), user.id);
+    if (!result.changes) return fail(res, 404, "Không tìm thấy thông báo", "NOT_FOUND");
+    const notification = db.prepare("SELECT * FROM notifications WHERE id = ?").get(Number(params.id));
+    return json(res, 200, { notification: mapNotification(notification) });
   }
 
   params = route("/api/saved-jobs/:jobId", pathname);

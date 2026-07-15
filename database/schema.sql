@@ -73,6 +73,18 @@ CREATE TABLE IF NOT EXISTS saved_jobs (
   PRIMARY KEY (user_id, job_id)
 );
 
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  application_id INTEGER REFERENCES applications(id) ON DELETE CASCADE,
+  job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+  type TEXT NOT NULL DEFAULT 'application' CHECK (type IN ('application', 'interview', 'hired', 'rejected')),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  read_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -130,6 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs(location);
 CREATE INDEX IF NOT EXISTS idx_jobs_employer ON jobs(employer_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id, applied_at DESC);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id, applied_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_candidate ON notifications(candidate_id, read_at, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs(created_at DESC);

@@ -22,6 +22,35 @@
 .company-detail-section dt { color: var(--company-muted); font-size: 11px; }
 .company-detail-section dd { margin: 0; color: #2e4154; font-size: 11px; font-weight: 700; }
 .company-cover-letter p { margin: 0; color: #536577; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.company-cv-attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 13px; border: 1px solid #c9dfdc; border-radius: 8px; padding: 14px 16px; background: #f2faf9; }
+.company-cv-attachment-icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 7px; color: var(--company-teal); background: #dff2ef; }
+.company-cv-attachment h3 { margin: 0 0 4px; color: var(--company-navy); font-size: 13px; }
+.company-cv-attachment p { margin: 0; color: var(--company-muted); font-size: 10px; }
+.company-cv-header-actions { display: flex; align-items: center; gap: 9px; }
+.company-modal-cv { width: min(940px, 100%); }
+.company-cv-reader { overflow: auto; max-height: calc(100vh - 150px); padding: 24px; background: #e9eef1; }
+.company-cv-sheet { overflow: hidden; width: min(780px, 100%); margin: 0 auto; border: 1px solid #d9e1e6; background: #fff; box-shadow: 0 12px 32px rgba(13, 34, 53, 0.12); }
+.company-cv-identity { display: flex; align-items: center; gap: 17px; padding: 28px 30px; color: #fff; background: #102d47; }
+.company-cv-identity .company-avatar { color: #0b7068; background: #e3f4f1; }
+.company-modal-cv .company-cv-identity h1 { margin: 0 0 5px; color: #fff; font-size: 25px; }
+.company-cv-identity p { margin: 0; color: #c9d6df; font-size: 13px; }
+.company-cv-content { display: grid; grid-template-columns: minmax(220px, 0.34fr) minmax(0, 0.66fr); }
+.company-cv-sidebar { display: grid; align-content: start; gap: 24px; padding: 26px 24px; background: #f1f7f7; }
+.company-cv-main { display: grid; align-content: start; gap: 24px; padding: 26px 30px; }
+.company-cv-sidebar section,
+.company-cv-main section { display: grid; gap: 10px; }
+.company-cv-sidebar h3,
+.company-cv-main h3 { margin: 0; color: var(--company-navy); font-size: 12px; text-transform: uppercase; }
+.company-cv-main h3 { border-bottom: 2px solid #d9ece9; padding-bottom: 8px; }
+.company-cv-sidebar p,
+.company-cv-main p { margin: 0; color: #485d70; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.company-cv-main small { color: var(--company-muted); font-size: 10px; }
+.company-cv-sidebar dl { display: grid; gap: 11px; margin: 0; }
+.company-cv-sidebar dl div { display: grid; gap: 3px; }
+.company-cv-sidebar dt { color: var(--company-muted); font-size: 9px; text-transform: uppercase; }
+.company-cv-sidebar dd { margin: 0; color: #2f4558; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.company-cv-skills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.company-cv-skills li { border: 1px solid #bfdbd7; border-radius: 5px; padding: 5px 7px; color: #176b64; background: #fff; font-size: 10px; font-weight: 750; }
 .company-application-status-cell { display: grid; justify-items: start; gap: 6px; }
 .company-application-status-cell small { color: var(--company-muted); font-size: 10px; font-weight: 800; }
 .company-interview-card { border: 1px solid #f1d29f; border-radius: 8px; padding: 16px; background: #fff9ec; }
@@ -53,6 +82,17 @@
 .company-result-card.danger > span { color: #a8323c; background: #f9dfe2; }
 
 @media (max-width: 680px) {
+  .company-cv-attachment { grid-template-columns: auto minmax(0, 1fr); }
+  .company-cv-attachment .company-button { grid-column: 1 / -1; width: 100%; }
+  .company-cv-modal-header { align-items: flex-start; }
+  .company-cv-header-actions { align-items: flex-end; flex-direction: column-reverse; }
+  .company-cv-header-actions .company-button { min-height: 34px; }
+  .company-cv-reader { padding: 10px; }
+  .company-cv-identity { align-items: flex-start; padding: 22px 18px; }
+  .company-cv-identity h1 { font-size: 20px; }
+  .company-cv-content { grid-template-columns: 1fr; }
+  .company-cv-sidebar,
+  .company-cv-main { padding: 20px 18px; }
   .company-interview-card dl { grid-template-columns: 1fr; }
   .company-interview-heading { align-items: flex-start; flex-direction: column; }
   .company-recruitment-actions,

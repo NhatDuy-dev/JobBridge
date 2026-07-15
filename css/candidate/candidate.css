@@ -4167,3 +4167,250 @@ body {
 .site-footer-bottom button:hover {
   color: #5eead4;
 }
+
+/* Candidate notification center */
+.notification-bell-button {
+  position: relative;
+}
+
+.notification-count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  background: #ef4444;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.candidate-notification-popover {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 84px;
+  z-index: 65;
+  width: min(430px, calc(100vw - 24px));
+  overflow: hidden;
+  border: 1px solid #e5eaf0;
+  border-radius: 16px;
+  color: #172033;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 39, 66, 0.2);
+}
+
+.candidate-notification-popover[hidden] {
+  display: none;
+}
+
+.candidate-notification-popover > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.candidate-notification-popover > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.candidate-notification-popover > header strong {
+  font-size: 18px;
+}
+
+.candidate-notification-popover > header span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.candidate-notification-popover > header button,
+.notification-mark-all {
+  border: 0;
+  color: #2563eb;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notification-popover-list {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.candidate-notification-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 16px 20px;
+  border-bottom: 1px solid #edf1f5;
+  background: #fff;
+}
+
+.notification-popover-list .candidate-notification-item {
+  grid-template-columns: auto minmax(0, 1fr);
+  cursor: pointer;
+}
+
+.candidate-notification-item.is-unread {
+  background: #eff6ff;
+}
+
+.notification-popover-list .candidate-notification-item:hover {
+  background: #f8fafc;
+}
+
+.notification-popover-list .candidate-notification-item.is-unread:hover {
+  background: #e7f0ff;
+}
+
+.notification-type-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  color: #1d4ed8;
+  background: #dbeafe;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.notification-type-hired {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.notification-type-rejected {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.notification-item-content {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.notification-item-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-item-title strong {
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.notification-item-title > span {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2563eb;
+}
+
+.notification-item-content p,
+.notification-item-content time,
+.notification-detail span {
+  margin: 0;
+  color: #607086;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.notification-item-content time {
+  color: #2563eb;
+  font-size: 12px;
+}
+
+.notification-detail {
+  display: grid;
+  gap: 3px;
+  margin: 5px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.notification-view-all {
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  color: #2563eb;
+  background: #fff;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.notification-empty {
+  display: grid;
+  gap: 6px;
+  padding: 36px 24px;
+  color: #64748b;
+  text-align: center;
+}
+
+.candidate-notification-list {
+  overflow: hidden;
+  border: 1px solid #e3e9f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.candidate-notification-list .candidate-notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-open-application {
+  align-self: center;
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notification-open-application:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+@media (max-width: 680px) {
+  .candidate-notification-popover {
+    position: fixed;
+    top: 72px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .candidate-notification-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .notification-open-application {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .notification-page-heading {
+    align-items: flex-start;
+  }
+}
