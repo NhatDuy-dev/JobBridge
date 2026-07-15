@@ -1,12 +1,13 @@
 # JobBridge
 
-Ứng dụng tuyển dụng với SPA, REST API và SQLite.
+Ứng dụng tuyển dụng với SPA, REST API Express và SQLite.
 
 ## Chạy dự án
 
-Yêu cầu Node.js 22.5 trở lên. Không cần cài package ngoài.
+Yêu cầu Node.js 22.5 trở lên.
 
 ```bash
+npm install
 npm start
 ```
 
