@@ -176,11 +176,14 @@ function renderTopbarUserArea(user) {
     `;
   }
 
+  const unreadNotifications = getCandidateUnreadNotificationCount();
   return `
     <div class="spa-user-box account-menu-shell">
-      <button class="topbar-icon-button" type="button" aria-label="Thông báo">
+      <button id="candidateNotificationButton" class="topbar-icon-button notification-bell-button" type="button" aria-label="Thông báo${unreadNotifications ? `, ${unreadNotifications} chưa đọc` : ""}" aria-controls="candidateNotificationPopover" aria-expanded="false">
         ${renderAccountIcon("bell")}
+        ${unreadNotifications ? `<span class="notification-count" aria-hidden="true">${unreadNotifications > 99 ? "99+" : unreadNotifications}</span>` : ""}
       </button>
+      ${renderCandidateNotificationPopover()}
       <button class="topbar-icon-button" type="button" aria-label="Tin nhắn">
         ${renderAccountIcon("chat")}
       </button>
@@ -314,6 +317,8 @@ function bindCandidateAccountMenu() {
     menu.hidden = true;
     button.setAttribute("aria-expanded", "false");
   });
+
+  bindCandidateNotificationCenter();
 }
 function showInlineMessage(selector, text, type) {
   const message = document.querySelector(selector);

@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   applications: "jobbridge_spa_applications",
   cvs: "jobbridge_spa_cvs",
   reports: "jobbridge_spa_job_reports",
+  notifications: "jobbridge_spa_notifications",
   session: "jobbridge_spa_session",
 };
 
@@ -253,12 +254,38 @@ const seedCvs = [
 
 const seedJobReports = [];
 
+const seedNotifications = [
+  {
+    id: 2001,
+    candidateId: 1,
+    applicationId: 1002,
+    jobId: 102,
+    type: "interview",
+    title: "Bạn có lịch phỏng vấn mới",
+    message: "Nova Studio đã mời bạn phỏng vấn vị trí UI UX Designer.",
+    createdAt: "2026-07-10T02:00:00.000Z",
+    readAt: null,
+  },
+  {
+    id: 2002,
+    candidateId: 1,
+    applicationId: 1003,
+    jobId: 104,
+    type: "rejected",
+    title: "Cập nhật kết quả ứng tuyển",
+    message: "FinSight đã cập nhật kết quả cho vị trí Data Analyst.",
+    createdAt: "2026-07-11T03:30:00.000Z",
+    readAt: "2026-07-11T05:00:00.000Z",
+  },
+];
+
 const appState = {
   users: [],
   jobs: [],
   applications: [],
   cvs: [],
   reports: [],
+  notifications: [],
   currentUser: null,
   authMode: "login",
   candidateTab: "jobs",
