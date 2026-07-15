@@ -26,6 +26,7 @@
   body[data-role="employer"] .spa-topbar { display: flex; flex-wrap: wrap; justify-content: space-between; }
   body[data-role="employer"] .spa-brand .brand-logo { width: 122px; }
   body[data-role="employer"] .spa-user-name { display: none; }
+  .company-topbar-context { display: none; }
   .company-main { padding: 20px 14px 34px; }
   .company-page-header { align-items: flex-start; }
   .company-page-header h1 { font-size: 22px; }

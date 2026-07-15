@@ -8,9 +8,9 @@ const COMPANY_TAB_CONFIG = {
 
 const COMPANY_APPLICATION_STATUSES = [
   { value: "Da nop", label: "Mới nhận" },
-  { value: "Len lich phong van", label: "Phỏng vấn" },
+  { value: "Len lich phong van", label: "Hẹn phỏng vấn" },
   { value: "Da tuyen", label: "Đã tuyển" },
-  { value: "Tu choi", label: "Từ chối" },
+  { value: "Tu choi", label: "Không phù hợp" },
 ];
 
 const companyUiState = {
@@ -101,6 +101,32 @@ function companyPersistJobs() {
 
 function companyPersistApplications() {
   writeStorage(STORAGE_KEYS.applications, appState.applications);
+}
+
+function showCompanyToast(message, type = "success") {
+  let toastHost = document.querySelector("#toastHost");
+  if (!toastHost) {
+    toastHost = document.createElement("div");
+    toastHost.id = "toastHost";
+    toastHost.className = "toast-host";
+    document.body.append(toastHost);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast company-toast ${type}`;
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
+  toast.innerHTML = `<span class="company-toast-message">${escapeHtml(message)}</span><button class="company-toast-close" type="button" aria-label="Đóng thông báo">&times;</button><span class="company-toast-progress" aria-hidden="true"></span>`;
+  toastHost.append(toast);
+
+  let timer;
+  const dismiss = () => {
+    if (toast.classList.contains("leaving")) return;
+    window.clearTimeout(timer);
+    toast.classList.add("leaving");
+    window.setTimeout(() => toast.remove(), 220);
+  };
+  toast.querySelector(".company-toast-close").addEventListener("click", dismiss);
+  timer = window.setTimeout(dismiss, 5000);
 }
 
 function companyGoToTab(tab, options = {}) {
