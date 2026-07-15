@@ -2,17 +2,36 @@
   "name": "jobbridge",
   "version": "1.0.0",
   "private": true,
-  "description": "JobBridge recruitment SPA with REST API and SQLite database",
   "type": "module",
   "scripts": {
-    "start": "node --experimental-sqlite server.js",
-    "dev": "node --experimental-sqlite --watch server.js",
-    "test": "node --test"
-  },
-  "engines": {
-    "node": ">=22.5.0"
-  },
+  "start": "node --experimental-sqlite server.js",
+  "dev": "node --experimental-sqlite --watch server.js",
+  "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+  "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+  "lint": "eslint ."
+},
   "dependencies": {
     "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "jest": "^30.4.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/auth.js",
+      "src/database.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 70,
+        "branches": 70,
+        "functions": 70,
+        "lines": 70
+      }
+    }
   }
 }
