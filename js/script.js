@@ -29,6 +29,7 @@ async function initApp() {
   appState.applications = readStorage(STORAGE_KEYS.applications, seedApplications).map(normalizeApplication);
   appState.cvs = readStorage(STORAGE_KEYS.cvs, seedCvs).map(normalizeCv);
   appState.reports = readStorage(STORAGE_KEYS.reports, seedJobReports);
+  appState.notifications = readStorage(STORAGE_KEYS.notifications, seedNotifications).map(normalizeNotification);
   syncAppliedJobsFromApplications();
   appState.currentUser = hydrateSessionUser(readStorage(STORAGE_KEYS.session, null));
 
@@ -37,6 +38,7 @@ async function initApp() {
   writeStorage(STORAGE_KEYS.applications, appState.applications);
   writeStorage(STORAGE_KEYS.cvs, appState.cvs);
   writeStorage(STORAGE_KEYS.reports, appState.reports);
+  writeStorage(STORAGE_KEYS.notifications, appState.notifications);
 
   if (await consumeOAuthCallback()) return;
   if (appState.currentUser) renderDashboard();
@@ -45,12 +47,17 @@ async function initApp() {
 
 function handleRealtimeStorageUpdate(event) {
   if (!appState.currentUser) return;
-  const sharedKeys = [STORAGE_KEYS.users, STORAGE_KEYS.jobs, STORAGE_KEYS.applications, STORAGE_KEYS.reports];
+  const sharedKeys = [STORAGE_KEYS.users, STORAGE_KEYS.jobs, STORAGE_KEYS.applications, STORAGE_KEYS.reports, STORAGE_KEYS.notifications];
   if (!sharedKeys.includes(event.key)) return;
   if (event.key === STORAGE_KEYS.users) appState.users = readStorage(STORAGE_KEYS.users, seedUsers).map(normalizeUser);
   if (event.key === STORAGE_KEYS.jobs) appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
   if (event.key === STORAGE_KEYS.applications) appState.applications = readStorage(STORAGE_KEYS.applications, seedApplications).map(normalizeApplication);
   if (event.key === STORAGE_KEYS.reports) appState.reports = readStorage(STORAGE_KEYS.reports, seedJobReports);
+  if (event.key === STORAGE_KEYS.notifications) appState.notifications = readStorage(STORAGE_KEYS.notifications, seedNotifications).map(normalizeNotification);
+  if (event.key === STORAGE_KEYS.notifications && appState.currentUser.role === "candidate") {
+    renderDashboard();
+    return;
+  }
   renderRoleView();
   refreshRealtimeLabels();
 }

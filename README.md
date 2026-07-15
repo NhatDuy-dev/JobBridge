@@ -42,6 +42,7 @@ Tài khoản mẫu (mật khẩu `123`):
 - `GET /api/jobs`, `GET /api/jobs/:id`, `POST /api/jobs`, `PATCH /api/jobs/:id/status`
 - `GET /api/applications`, `POST /api/applications`, `PATCH /api/applications/:id/status`
 - `GET /api/saved-jobs`, `POST /api/saved-jobs/:jobId`, `DELETE /api/saved-jobs/:jobId`
+- `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `PATCH /api/notifications/read-all`
 - `PATCH /api/profile`
 - `GET /api/health`
 

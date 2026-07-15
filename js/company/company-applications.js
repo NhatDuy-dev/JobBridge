@@ -263,9 +263,48 @@ function updateCompanyApplication(applicationId, changes, successMessage) {
   const updatedAt = new Date().toISOString();
   appState.applications = appState.applications.map((application) => Number(application.id) === Number(ownedApplication.id) ? { ...application, ...changes, updatedAt } : application);
   companyPersistApplications();
+  createCandidateApplicationNotification({ ...ownedApplication, ...changes, updatedAt });
   companyCloseModal();
   renderCompanyTabContent();
   showCompanyToast(successMessage, "success");
+}
+
+function createCandidateApplicationNotification(application) {
+  const job = companyFindJob(application.jobId);
+  const companyName = job?.company || companyDisplayName();
+  const jobTitle = job?.title || application.jobTitle || "vị trí đã ứng tuyển";
+  const notificationByStatus = {
+    "Len lich phong van": {
+      type: "interview",
+      title: "Bạn có lịch phỏng vấn mới",
+      message: `${companyName} đã mời bạn phỏng vấn vị trí ${jobTitle}.`,
+    },
+    "Da tuyen": {
+      type: "hired",
+      title: "Chúc mừng, bạn đã được tuyển!",
+      message: `${companyName} đã chọn bạn cho vị trí ${jobTitle}.`,
+    },
+    "Tu choi": {
+      type: "rejected",
+      title: "Cập nhật kết quả ứng tuyển",
+      message: `${companyName} đã cập nhật kết quả cho vị trí ${jobTitle}.`,
+    },
+  };
+  const content = notificationByStatus[application.status];
+  if (!content) return;
+
+  const now = new Date().toISOString();
+  const notification = normalizeNotification({
+    id: Math.max(0, ...appState.notifications.map((item) => Number(item.id) || 0)) + 1,
+    candidateId: application.candidateId,
+    applicationId: application.id,
+    jobId: application.jobId,
+    ...content,
+    createdAt: now,
+    readAt: null,
+  });
+  appState.notifications.unshift(notification);
+  writeStorage(STORAGE_KEYS.notifications, appState.notifications);
 }
 
 function companyApplicationStatusDetail(application) {

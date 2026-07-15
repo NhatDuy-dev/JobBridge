@@ -15,6 +15,9 @@ function bootMockDatabase() {
   if (!localStorage.getItem(STORAGE_KEYS.reports)) {
     localStorage.setItem(STORAGE_KEYS.reports, JSON.stringify(seedJobReports));
   }
+  if (!localStorage.getItem(STORAGE_KEYS.notifications)) {
+    localStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(seedNotifications));
+  }
 }
 
 function readStorage(key, fallback) {
@@ -75,6 +78,21 @@ function normalizeApplication(application) {
     cvId: application.cvId ? Number(application.cvId) : null,
     cvName: String(application.cvName || "CV không xác định"),
     withdrawnAt: application.withdrawnAt || null,
+  };
+}
+
+function normalizeNotification(notification) {
+  return {
+    ...notification,
+    id: Number(notification.id),
+    candidateId: Number(notification.candidateId),
+    applicationId: notification.applicationId ? Number(notification.applicationId) : null,
+    jobId: notification.jobId ? Number(notification.jobId) : null,
+    type: String(notification.type || "application"),
+    title: String(notification.title || "Cập nhật từ nhà tuyển dụng"),
+    message: String(notification.message || "Hồ sơ ứng tuyển của bạn vừa được cập nhật."),
+    createdAt: notification.createdAt || new Date().toISOString(),
+    readAt: notification.readAt || null,
   };
 }
 
