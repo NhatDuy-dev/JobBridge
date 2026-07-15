@@ -1946,15 +1946,9 @@ function renderAdminApplicationRow(application) {
             Chi tiết
           </button>
 
-          <button
-            type="button"
-            class="compact-button"
-            data-admin-change-application-status="${Number(
-              application.id,
-            )}"
-          >
-            Đổi trạng thái
-          </button>
+          <span class="admin-self-label">
+            Do doanh nghiệp xử lý
+          </span>
         </div>
       </td>
     </tr>
@@ -1977,8 +1971,8 @@ function renderAdminApplicationsContent() {
         <div>
           <h2>Quản lý hồ sơ ứng tuyển</h2>
           <p class="admin-users-description">
-    Theo dõi ứng viên, tin tuyển dụng và tiến trình tuyển dụng.
-</p>
+            Admin chỉ theo dõi; doanh nghiệp chịu trách nhiệm xử lý hồ sơ.
+          </p>
         </div>
 
         <button
@@ -2253,77 +2247,6 @@ function openAdminApplicationDetail(applicationId) {
   );
 }
 
-async function changeAdminApplicationStatus(applicationId) {
-  const application =
-    findAdminApplicationById(applicationId);
-
-  if (!application) {
-    showToast(
-      "Không tìm thấy hồ sơ ứng tuyển.",
-      "error",
-    );
-    return;
-  }
-
-  const nextStatus = window
-    .prompt(
-      [
-        "Nhập một trong các trạng thái sau:",
-        "Da nop",
-        "Len lich phong van",
-        "Da tuyen",
-        "Tu choi",
-      ].join("\n"),
-      application.status || "Da nop",
-    )
-    ?.trim();
-
-  if (!nextStatus) {
-    return;
-  }
-
-  const allowedStatuses = [
-    "Da nop",
-    "Len lich phong van",
-    "Da tuyen",
-    "Tu choi",
-  ];
-
-  if (!allowedStatuses.includes(nextStatus)) {
-    showToast(
-      "Trạng thái không hợp lệ.",
-      "error",
-    );
-    return;
-  }
-
-  try {
-    await apiRequest(
-      `/applications/${Number(
-        applicationId,
-      )}/status`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: nextStatus,
-        }),
-      },
-    );
-
-    await showAdminTab("applications");
-
-    showToast(
-      "Đã cập nhật trạng thái hồ sơ.",
-      "success",
-    );
-  } catch (error) {
-    showToast(
-      error.message ||
-        "Không thể cập nhật trạng thái hồ sơ.",
-      "error",
-    );
-  }
-}
 function bindAdminCompanyEvents() {
   document
     .querySelector("#adminCompanyFilterForm")
@@ -2470,23 +2393,6 @@ function bindAdminApplicationEvents() {
       );
     });
 
-  document
-    .querySelectorAll(
-      "[data-admin-change-application-status]",
-    )
-    .forEach((button) => {
-      button.addEventListener(
-        "click",
-        async () => {
-          await changeAdminApplicationStatus(
-            Number(
-              button.dataset
-                .adminChangeApplicationStatus,
-            ),
-          );
-        },
-      );
-    });
 }
 function getAdminReportStatusLabel(status) {
   const labels = {
