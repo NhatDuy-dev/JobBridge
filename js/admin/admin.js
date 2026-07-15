@@ -1634,13 +1634,22 @@ function renderAdminJobsContent() {
           </p>
         </div>
 
-        <button
-          type="button"
-          id="refreshAdminJobsButton"
-          class="secondary-button admin-refresh-button"
-        >
-          Làm mới
-        </button>
+        <div class="admin-heading-actions">
+          <button
+            type="button"
+            id="exportAdminJobsButton"
+            class="secondary-button admin-refresh-button"
+          >
+            Xuất CSV
+          </button>
+          <button
+            type="button"
+            id="refreshAdminJobsButton"
+            class="secondary-button admin-refresh-button"
+          >
+            Làm mới
+          </button>
+        </div>
       </div>
 
       <div class="admin-job-stat-grid">
@@ -4212,6 +4221,10 @@ function bindAdminUserEvents() {
 
 function bindAdminJobEvents() {
   document
+    .querySelector("#exportAdminJobsButton")
+    ?.addEventListener("click", exportAdminJobsCsv);
+
+  document
     .querySelector("#adminJobFilterForm")
     ?.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -4307,6 +4320,42 @@ function bindAdminJobEvents() {
         }
       });
     });
+}
+
+function exportAdminJobsCsv() {
+  const jobs = appState.adminJobs || [];
+  if (!jobs.length) {
+    showToast("Không có tin tuyển dụng để xuất.", "error");
+    return;
+  }
+
+  const rows = [
+    ["ID", "Tiêu đề", "Công ty", "Địa điểm", "Loại", "Trạng thái", "Mức lương", "Ngày tạo"],
+    ...jobs.map((job) => [
+      job.id,
+      job.title,
+      job.company,
+      job.location,
+      job.type,
+      getAdminJobStatusLabel(job.status),
+      job.salary,
+      job.createdAt || job.created_at || "",
+    ]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(formatAdminCsvCell).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `jobbridge-tin-tuyen-dung-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Đã xuất ${jobs.length} tin tuyển dụng.`, "success");
+}
+
+function formatAdminCsvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
 function openAdminJobDetail(jobId) {
