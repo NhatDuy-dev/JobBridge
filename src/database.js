@@ -10,32 +10,25 @@ export function openDatabase(filename = path.join(root, "data", "jobbridge.db"))
   if (filename !== ":memory:") fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+  migrateAdminUserColumns(db);
   db.exec(fs.readFileSync(path.join(root, "database", "schema.sql"), "utf8"));
-  migrateDatabase(db);
   seedDatabase(db);
   return db;
 }
 
-function migrateDatabase(db) {
-  const applicationColumns = new Set(db.prepare("PRAGMA table_info(applications)").all().map((column) => column.name));
+// Cho phép database tạo từ cấu trúc role mới chạy được schema admin gốc.
+function migrateAdminUserColumns(db) {
+  const usersTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+  if (!usersTable) return;
+  const columns = new Set(db.prepare("PRAGMA table_info(users)").all().map((column) => column.name));
   const additions = [
-    ["cv_id", "INTEGER"],
-    ["cv_name", "TEXT NOT NULL DEFAULT ''"],
-    ["withdrawn_at", "TEXT"],
+    ["status", "TEXT NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Locked'))"],
+    ["locked_reason", "TEXT NOT NULL DEFAULT ''"],
+    ["locked_at", "TEXT"],
+    ["last_login_at", "TEXT"],
   ];
   for (const [name, definition] of additions) {
-    if (!applicationColumns.has(name)) db.exec(`ALTER TABLE applications ADD COLUMN ${name} ${definition}`);
-  }
-
-  const cvColumns = new Set(db.prepare("PRAGMA table_info(cvs)").all().map((column) => column.name));
-  const cvAdditions = [
-    ["original_file_name", "TEXT NOT NULL DEFAULT ''"],
-    ["mime_type", "TEXT NOT NULL DEFAULT ''"],
-    ["file_size", "INTEGER NOT NULL DEFAULT 0"],
-    ["file_data", "BLOB"],
-  ];
-  for (const [name, definition] of cvAdditions) {
-    if (!cvColumns.has(name)) db.exec(`ALTER TABLE cvs ADD COLUMN ${name} ${definition}`);
+    if (!columns.has(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition};`);
   }
 }
 
@@ -57,12 +50,10 @@ function seedDatabase(db) {
       [104, employer, "Data Analyst", "FinSight", "16 - 28 trieu", 16, 28, "Da Nang", "Remote", "Approved", "Phan tich du lieu ung vien va tao bao cao.", "Ke toan", "Duoi 1 nam", "Tai chinh", "Ke toan/Kiem toan", "off"]
     ];
     jobs.forEach((job) => insertJob.run(...job));
-    const profileSnapshot = JSON.stringify({ name: "Nguyen Minh Anh", desiredTitle: "Frontend Developer", phone: "0901234567", location: "TP.HCM" });
-    const cvId = db.prepare("INSERT INTO cvs(candidate_id,name,source,profile_snapshot) VALUES(?,?,?,?)").run(candidate, "CV Frontend Developer", "profile", profileSnapshot).lastInsertRowid;
-    const app = db.prepare("INSERT INTO applications (candidate_id,job_id,status,applied_at,cv_id,cv_name) VALUES (?,?,?,?,?,?)");
-    app.run(candidate, 101, "Da nop", "2026-07-01", cvId, "CV Frontend Developer");
-    app.run(candidate, 102, "Len lich phong van", "2026-07-03", cvId, "CV Frontend Developer");
-    app.run(candidate, 104, "Tu choi", "2026-07-05", cvId, "CV Frontend Developer");
+    const app = db.prepare("INSERT INTO applications (candidate_id,job_id,status,applied_at) VALUES (?,?,?,?)");
+    app.run(candidate, 101, "Da nop", "2026-07-01");
+    app.run(candidate, 102, "Len lich phong van", "2026-07-03");
+    app.run(candidate, 104, "Tu choi", "2026-07-05");
     db.prepare("INSERT INTO saved_jobs (user_id,job_id) VALUES (?,?)").run(candidate, 102);
     for (const skill of ["ReactJS", "Figma", "JavaScript"]) {
       const skillId = db.prepare("INSERT INTO skills(name) VALUES (?)").run(skill).lastInsertRowid;
@@ -79,7 +70,7 @@ export function publicUser(db, user) {
   if (!user) return null;
   const skills = db.prepare("SELECT s.name FROM skills s JOIN user_skills us ON us.skill_id=s.id WHERE us.user_id=? ORDER BY s.name").all(user.id).map((x) => x.name);
   const savedJobs = db.prepare("SELECT job_id FROM saved_jobs WHERE user_id=?").all(user.id).map((x) => x.job_id);
-  const appliedJobs = db.prepare("SELECT job_id FROM applications WHERE candidate_id=? AND withdrawn_at IS NULL").all(user.id).map((x) => x.job_id);
+  const appliedJobs = db.prepare("SELECT job_id FROM applications WHERE candidate_id=?").all(user.id).map((x) => x.job_id);
   return { id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone, location: user.location, desiredTitle: user.desired_title, dateOfBirth: user.date_of_birth, gender: user.gender, experienceLevel: user.experience_level, education: user.education, portfolio: user.portfolio, summary: user.summary, skills, savedJobs, appliedJobs, createdAt: user.created_at };
 }
 

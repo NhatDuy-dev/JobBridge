@@ -30,8 +30,13 @@ function initApp() {
 }
 
 function handleRealtimeStorageUpdate(event) {
-  if (!appState.currentUser || event.key !== STORAGE_KEYS.jobs) return;
-  appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
+  if (!appState.currentUser) return;
+  const sharedKeys = [STORAGE_KEYS.users, STORAGE_KEYS.jobs, STORAGE_KEYS.applications, STORAGE_KEYS.reports];
+  if (!sharedKeys.includes(event.key)) return;
+  if (event.key === STORAGE_KEYS.users) appState.users = readStorage(STORAGE_KEYS.users, seedUsers).map(normalizeUser);
+  if (event.key === STORAGE_KEYS.jobs) appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
+  if (event.key === STORAGE_KEYS.applications) appState.applications = readStorage(STORAGE_KEYS.applications, seedApplications).map(normalizeApplication);
+  if (event.key === STORAGE_KEYS.reports) appState.reports = readStorage(STORAGE_KEYS.reports, seedJobReports);
   renderRoleView();
   refreshRealtimeLabels();
 }

@@ -1,12 +1,13 @@
 # JobBridge
 
-Ứng dụng tuyển dụng với SPA, REST API và SQLite.
+Ứng dụng tuyển dụng với SPA, REST API Express và SQLite.
 
 ## Chạy dự án
 
-Yêu cầu Node.js 22.5 trở lên. Không cần cài package ngoài.
+Yêu cầu Node.js 22.5 trở lên.
 
 ```bash
+npm install
 npm start
 ```
 
@@ -47,3 +48,10 @@ Tài khoản mẫu (mật khẩu `123`):
 Gửi token qua header `Authorization: Bearer <token>`. Lỗi có cấu trúc `{ "error": { "code", "message" } }`.
 
 Schema đầy đủ nằm trong `database/schema.sql`.
+
+## Kiểm tra Admin
+
+Đăng nhập bằng tài khoản:
+
+- Email: admin@test.com
+- Mật khẩu: 123

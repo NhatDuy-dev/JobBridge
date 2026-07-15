@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
   education TEXT NOT NULL DEFAULT '',
   portfolio TEXT NOT NULL DEFAULT '',
   summary TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Locked')),
+  locked_reason TEXT NOT NULL DEFAULT '',
+  locked_at TEXT,
+  last_login_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -28,20 +32,6 @@ CREATE TABLE IF NOT EXISTS user_skills (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, skill_id)
-);
-
-CREATE TABLE IF NOT EXISTS cvs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  source TEXT NOT NULL DEFAULT 'profile' CHECK (source IN ('profile', 'upload')),
-  profile_snapshot TEXT NOT NULL DEFAULT '{}',
-  original_file_name TEXT NOT NULL DEFAULT '',
-  mime_type TEXT NOT NULL DEFAULT '',
-  file_size INTEGER NOT NULL DEFAULT 0,
-  file_data BLOB,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS jobs (
@@ -71,9 +61,6 @@ CREATE TABLE IF NOT EXISTS applications (
   job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'Da nop' CHECK (status IN ('Da nop', 'Len lich phong van', 'Da tuyen', 'Tu choi')),
   cover_letter TEXT NOT NULL DEFAULT '',
-  cv_id INTEGER REFERENCES cvs(id) ON DELETE SET NULL,
-  cv_name TEXT NOT NULL DEFAULT '',
-  withdrawn_at TEXT,
   applied_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(candidate_id, job_id)
@@ -86,18 +73,6 @@ CREATE TABLE IF NOT EXISTS saved_jobs (
   PRIMARY KEY (user_id, job_id)
 );
 
-CREATE TABLE IF NOT EXISTS job_reports (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-  reason TEXT NOT NULL CHECK (reason IN ('incorrect', 'scam', 'impersonation', 'fee', 'other')),
-  details TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved')),
-  reported_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(candidate_id, job_id)
-);
-
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -106,11 +81,55 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  target_type TEXT NOT NULL CHECK (target_type IN ('user', 'job', 'company')),
+  target_id INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Resolved', 'Rejected')),
+  admin_note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT,
+  resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL DEFAULT '',
+  entity_id INTEGER,
+  old_value TEXT NOT NULL DEFAULT '',
+  new_value TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT OR IGNORE INTO system_settings (setting_key, setting_value)
+VALUES
+  ('site_name', 'JobBridge'),
+  ('support_email', 'support@jobbridge.vn'),
+  ('allow_registration', 'true'),
+  ('allow_job_posting', 'true'),
+  ('require_job_approval', 'true'),
+  ('log_retention_days', '90'),
+  ('maintenance_mode', 'false');
+
+CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs(location);
 CREATE INDEX IF NOT EXISTS idx_jobs_employer ON jobs(employer_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id, applied_at DESC);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id, applied_at DESC);
-CREATE INDEX IF NOT EXISTS idx_cvs_candidate ON cvs(candidate_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_job_reports_status ON job_reports(status, reported_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs(created_at DESC);
