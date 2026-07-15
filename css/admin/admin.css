@@ -1,4 +1,48 @@
-/* Thiện phát triển giao diện admin trong file này. */
-body[data-role="admin"] .admin-workspace {
-  border-top: 4px solid #7c3aed;
-}
+body[data-role="admin"] .spa-dashboard { padding: 0; max-width: none; }
+body[data-role="admin"] .top-employers { display: none; }
+.admin-layout { display: grid; grid-template-columns: 245px minmax(0,1fr); min-height: 720px; background: #f5f7fb; }
+.admin-sidebar { padding: 28px 18px; color: #e2e8f0; background: #172554; }
+.admin-sidebar h2 { margin: 0; color: #fff; font-size: 22px; }
+.admin-sidebar p { margin: 6px 0 26px; color: #93c5fd; }
+.admin-navigation { display: grid; gap: 7px; }
+.admin-nav-button { border: 0; border-radius: 9px; padding: 12px 14px; color: #cbd5e1; background: transparent; text-align: left; font-weight: 700; }
+.admin-nav-button:hover, .admin-nav-button.active { color: #fff; background: #2563eb; }
+.admin-main { min-width: 0; padding: 28px; }
+.admin-heading, .admin-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.admin-heading { margin-bottom: 24px; }
+.admin-heading h1 { margin: 3px 0 0; font-size: 29px; }
+.admin-heading .eyebrow { margin: 0; }
+.admin-section-heading { display: block; margin-bottom: 18px; }
+.admin-section-heading h2, .admin-panel h2 { margin-bottom: 6px; }
+.admin-section-heading p { color: #64748b; }
+.admin-stat-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin-bottom: 20px; }
+.admin-stat-card, .admin-panel, .admin-table-card { border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(15,23,42,.05); }
+.admin-stat-card { display: grid; gap: 8px; padding: 20px; border-top: 4px solid #2563eb; }
+.admin-stat-card span, .admin-stat-card small { color: #64748b; }
+.admin-stat-card strong { color: #172554; font-size: 30px; }
+.admin-panel { padding: 22px; }
+.admin-toolbar { display: grid; grid-template-columns: minmax(220px,1fr) 190px auto auto; gap: 10px; margin-bottom: 16px; }
+.admin-table-card { overflow: hidden; }
+.admin-table-wrapper { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; }
+.admin-table th, .admin-table td { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; font-size: 14px; }
+.admin-table th { color: #475569; background: #f8fafc; white-space: nowrap; }
+.admin-table td strong, .admin-table td small { display: block; }
+.admin-table td small { margin-top: 4px; color: #64748b; }
+.admin-table tbody tr:hover { background: #f8fbff; }
+.admin-badge { display: inline-flex; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.admin-badge.success { color: #15803d; background: #dcfce7; }
+.admin-badge.warning { color: #a16207; background: #fef3c7; }
+.admin-badge.danger { color: #b91c1c; background: #fee2e2; }
+.admin-badge.neutral { color: #475569; background: #e2e8f0; }
+.admin-actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 240px; }
+.compact-button { min-height: 32px; border: 1px solid #bfdbfe; border-radius: 7px; padding: 0 10px; color: #1d4ed8; background: #eff6ff; font-weight: 700; }
+.compact-button.danger { border-color: #fecaca; color: #b91c1c; background: #fff1f2; }
+.admin-empty { padding: 36px !important; color: #64748b; text-align: center !important; }
+.admin-self { color: #64748b; font-size: 12px; }
+.admin-settings { max-width: 720px; }
+.admin-settings form { display: grid; gap: 18px; margin-top: 22px; }
+.admin-check { display: flex; align-items: center; gap: 10px; }
+.admin-check input { width: 18px; min-height: 18px; }
+@media (max-width: 1000px) { .admin-stat-grid { grid-template-columns: repeat(2,1fr); } .admin-toolbar { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .admin-layout { display: block; } .admin-sidebar { padding: 18px; } .admin-navigation { grid-template-columns: repeat(2,1fr); } .admin-main { padding: 18px; } .admin-stat-grid, .admin-toolbar { grid-template-columns: 1fr; } .admin-heading { align-items: flex-start; } }
