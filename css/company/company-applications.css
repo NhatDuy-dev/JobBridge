@@ -22,14 +22,41 @@
 .company-detail-section dt { color: var(--company-muted); font-size: 11px; }
 .company-detail-section dd { margin: 0; color: #2e4154; font-size: 11px; font-weight: 700; }
 .company-cover-letter p { margin: 0; color: #536577; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
-.company-status-form { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: end; gap: 14px; border-top: 1px solid var(--company-line); padding-top: 18px; }
 .company-application-status-cell { display: grid; justify-items: start; gap: 6px; }
-.company-application-status-cell small { font-size: 10px; font-weight: 800; }
-.company-application-status-cell small.unreviewed { color: #a85a08; }
-.company-application-status-cell small.reviewed { color: #19703b; }
-.company-review-gate { grid-column: 1 / -1; border: 1px solid #f1d29f; border-radius: 7px; padding: 12px 14px; background: #fff9ec; }
-.company-review-gate.reviewed { border-color: #b9dfc5; background: #eff9f2; }
-.company-review-gate label { display: flex; align-items: center; gap: 9px; color: #25394d; font-size: 12px; font-weight: 850; }
-.company-review-gate input { width: 16px; height: 16px; accent-color: var(--company-teal); }
-.company-review-gate p { margin: 5px 0 0 25px; color: var(--company-muted); font-size: 11px; line-height: 1.45; }
-.company-status-form :disabled { cursor: not-allowed; opacity: 0.55; }
+.company-application-status-cell small { color: var(--company-muted); font-size: 10px; font-weight: 800; }
+.company-interview-card { border: 1px solid #f1d29f; border-radius: 8px; padding: 16px; background: #fff9ec; }
+.company-interview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.company-interview-heading p,
+.company-recruitment-heading p { margin: 0 0 4px; color: var(--company-muted); font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.company-interview-heading h3,
+.company-recruitment-heading h3 { margin: 0; color: var(--company-navy); font-size: 15px; }
+.company-interview-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin: 0; }
+.company-interview-card dl div { display: grid; gap: 4px; }
+.company-interview-card dt { color: var(--company-muted); font-size: 10px; }
+.company-interview-card dd { margin: 0; color: #2e4154; font-size: 12px; font-weight: 750; overflow-wrap: anywhere; }
+.company-recruitment-panel { display: grid; gap: 16px; border-top: 1px solid var(--company-line); padding-top: 18px; }
+.company-recruitment-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.company-button-danger { border-color: #e8a9ae; color: #a8323c; background: #fff5f6; }
+.company-button-danger:hover { border-color: #d98189; background: #ffecef; }
+.company-action-form { border: 1px solid var(--company-line); border-radius: 8px; padding: 16px; background: #f8fafb; }
+.company-action-form[hidden],
+.company-recruitment-actions[hidden] { display: none; }
+.company-action-form textarea { min-height: 86px; resize: vertical; }
+.company-action-form-footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--company-line); padding-top: 14px; }
+.company-result-card { display: flex; align-items: flex-start; gap: 12px; border: 1px solid; border-radius: 8px; padding: 16px; }
+.company-result-card > span { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 50%; }
+.company-result-card h3 { margin: 0 0 5px; font-size: 14px; }
+.company-result-card p { margin: 0; color: #526275; font-size: 11px; line-height: 1.55; }
+.company-result-card.success { border-color: #b9dfc5; background: #eff9f2; }
+.company-result-card.success > span { color: #19703b; background: #d9f0df; }
+.company-result-card.danger { border-color: #f0c0c4; background: #fff4f5; }
+.company-result-card.danger > span { color: #a8323c; background: #f9dfe2; }
+
+@media (max-width: 680px) {
+  .company-interview-card dl { grid-template-columns: 1fr; }
+  .company-interview-heading { align-items: flex-start; flex-direction: column; }
+  .company-recruitment-actions,
+  .company-action-form-footer { align-items: stretch; flex-direction: column; }
+  .company-recruitment-actions .company-button,
+  .company-action-form-footer .company-button { width: 100%; }
+}
