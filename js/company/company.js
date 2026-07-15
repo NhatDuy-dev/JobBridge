@@ -69,10 +69,7 @@ function decorateCompanyShell() {
   if (topbar && userBox && !topbar.querySelector(".company-topbar-context")) {
     const context = document.createElement("div");
     context.className = "company-topbar-context";
-    context.innerHTML = `
-      <span class="company-topbar-context-icon">${companyIcon("briefcase")}</span>
-      <span class="company-topbar-context-copy"><strong>Trung tâm tuyển dụng</strong><small>Quản lý tin đăng và ứng viên</small></span>
-    `;
+    context.textContent = "Cổng nhà tuyển dụng";
     topbar.insertBefore(context, userBox);
   }
 
@@ -87,6 +84,37 @@ function decorateCompanyShell() {
       <span>Tiêu chuẩn tin đăng</span>
       <span>Câu hỏi thường gặp</span>
     `;
+  }
+
+  const employerFooter = document.querySelector('.site-footer-column[aria-label="Dành cho nhà tuyển dụng"]');
+  if (employerFooter) {
+    employerFooter.className = "site-footer-column company-footer-information";
+    employerFooter.innerHTML = `
+      <h2>Dành cho nhà tuyển dụng</h2>
+      <span>Đăng tin tuyển dụng</span>
+      <span>Quản lý ứng viên</span>
+      <span>Giải pháp tuyển dụng</span>
+      <span>Cẩm nang tuyển dụng</span>
+    `;
+  }
+
+  const supportEmail = document.querySelector(".site-footer-support a");
+  if (supportEmail) {
+    const emailText = document.createElement("span");
+    emailText.className = "company-footer-static-text";
+    emailText.textContent = supportEmail.textContent;
+    supportEmail.replaceWith(emailText);
+  }
+
+  const footerLegal = document.querySelector(".site-footer-bottom > div");
+  if (footerLegal) footerLegal.innerHTML = "<span>Điều khoản sử dụng</span><span>Chính sách bảo mật</span>";
+
+  const footerLogo = document.querySelector(".site-footer-logo");
+  if (footerLogo?.tagName === "BUTTON") {
+    const staticLogo = document.createElement("div");
+    staticLogo.className = footerLogo.className;
+    staticLogo.innerHTML = footerLogo.innerHTML;
+    footerLogo.replaceWith(staticLogo);
   }
 }
 

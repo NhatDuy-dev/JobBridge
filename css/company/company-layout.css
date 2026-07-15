@@ -26,29 +26,14 @@ body[data-role="employer"] .spa-topbar {
 body[data-role="employer"] .spa-topbar > .spa-brand { grid-column: 1; }
 
 .company-topbar-context {
-  display: flex;
-  min-width: 0;
   grid-column: 2;
-  align-items: center;
-  justify-self: center;
-  gap: 10px;
+  justify-self: start;
+  border-left: 1px solid var(--company-line);
+  padding-left: 20px;
+  color: #526275;
+  font-size: 12px;
+  font-weight: 750;
 }
-
-.company-topbar-context-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 7px;
-  color: var(--company-teal);
-  background: #e8f6f4;
-}
-
-.company-topbar-context-icon .company-icon { width: 18px; }
-.company-topbar-context-copy { display: grid; gap: 2px; }
-.company-topbar-context-copy strong { color: var(--company-navy); font-size: 12px; }
-.company-topbar-context-copy small { color: var(--company-muted); font-size: 10px; }
 
 body[data-role="employer"] .spa-user-box {
   grid-column: 3;
@@ -88,6 +73,17 @@ body[data-role="employer"] .site-footer-logo .brand-logo {
   color: #cbd5e1;
   font-size: 13px;
   line-height: 1.45;
+}
+
+body[data-role="employer"] .site-footer-support .company-footer-static-text,
+body[data-role="employer"] .site-footer-bottom span {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+body[data-role="employer"] .site-footer-bottom > div {
+  display: flex;
+  gap: 18px;
 }
 
 body[data-role="employer"] .toast-host {
