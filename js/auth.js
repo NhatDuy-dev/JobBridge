@@ -233,6 +233,7 @@ function isValidEmail(email) {
 
 function logout() {
   stopRealtimeUpdates();
+  if (typeof clearApiToken === "function") clearApiToken();
   localStorage.removeItem(STORAGE_KEYS.session);
   appState.currentUser = null;
   appState.authMode = "login";

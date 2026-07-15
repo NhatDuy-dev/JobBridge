@@ -5,8 +5,6 @@ const STORAGE_KEYS = {
   applications: "jobbridge_spa_applications",
   cvs: "jobbridge_spa_cvs",
   reports: "jobbridge_spa_job_reports",
-  adminLogs: "jobbridge_spa_admin_logs",
-  adminSettings: "jobbridge_spa_admin_settings",
   session: "jobbridge_spa_session",
 };
 
@@ -280,7 +278,31 @@ const appState = {
   matchScores: {},
   companyTab: "home",
   adminTab: "dashboard",
-  adminSearch: "",
+  adminDashboard: null,
+  adminUsers: [],
+  adminUserFilters: { keyword: "", role: "", status: "" },
+  adminJobs: [],
+  adminJobFilters: { keyword: "", status: "" },
+  adminCompanies: [],
+  adminCompanyFilters: { keyword: "", status: "" },
+  adminApplications: [],
+  adminApplicationFilters: { keyword: "", status: "" },
+  adminReports: [],
+  adminReportFilters: { keyword: "", status: "", type: "" },
+  adminLogs: [],
+  adminLogFilters: { keyword: "", action: "" },
+  adminSettings: {
+    site_name: "JobBridge",
+    support_email: "",
+    allow_registration: "true",
+    allow_job_posting: "true",
+    require_job_approval: "true",
+    log_retention_days: "90",
+    maintenance_mode: "false",
+    updatedAt: "",
+    updatedByName: "",
+    updatedByEmail: "",
+  },
 };
 
 const app = document.querySelector("#app");
