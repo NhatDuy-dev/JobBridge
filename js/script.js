@@ -85,6 +85,7 @@ function renderDashboard() {
   else document.querySelector("#logoutButton")?.addEventListener("click", logout);
 
   renderRoleView();
+  mountSupportChatbox();
   bindSiteFooter();
   bindTopEmployers();
   startRealtimeUpdates();
