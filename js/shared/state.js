@@ -5,6 +5,8 @@ const STORAGE_KEYS = {
   applications: "jobbridge_spa_applications",
   cvs: "jobbridge_spa_cvs",
   reports: "jobbridge_spa_job_reports",
+  adminLogs: "jobbridge_spa_admin_logs",
+  adminSettings: "jobbridge_spa_admin_settings",
   session: "jobbridge_spa_session",
 };
 
@@ -277,6 +279,8 @@ const appState = {
   },
   matchScores: {},
   companyTab: "home",
+  adminTab: "dashboard",
+  adminSearch: "",
 };
 
 const app = document.querySelector("#app");
