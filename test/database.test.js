@@ -1,5 +1,7 @@
 import { jest } from "@jest/globals";
-import { DatabaseSync } from "node:sqlite";
+
+const { DatabaseSync } =
+  process.getBuiltinModule("node:sqlite");
 
 import {
   openDatabase,

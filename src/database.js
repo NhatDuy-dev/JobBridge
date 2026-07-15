@@ -1,8 +1,10 @@
-import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { hashPassword } from "./auth.js";
+
+const { DatabaseSync } =
+  process.getBuiltinModule("node:sqlite");
 
 const root = path.dirname(
   path.dirname(fileURLToPath(import.meta.url)),
