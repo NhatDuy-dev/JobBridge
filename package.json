@@ -8,6 +8,7 @@
     "dev": "node --experimental-sqlite --watch server.js",
     "test": "node --experimental-sqlite --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:coverage": "node --experimental-sqlite --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:node": "node --experimental-sqlite --test test/chatbox.test.js test/notifications.test.js",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -24,6 +25,11 @@
     "collectCoverageFrom": [
       "src/auth.js",
       "src/database.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/test/chatbox.test.js",
+      "/test/notifications.test.js"
     ],
     "coverageThreshold": {
       "global": {
