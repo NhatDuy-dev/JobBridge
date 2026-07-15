@@ -15,6 +15,7 @@ const db = openDatabase(process.env.DB_PATH || undefined);
 const port = Number(process.env.PORT || 3000);
 const SESSION_DAYS = 7;
 const app = express();
+const phoneOtpChallenges = new Map();
 
 function ensureAdminSchema() {
   const userColumns = new Set(
@@ -261,6 +262,52 @@ const issueSession = (userId) => {
   };
 };
 
+const publicOrigin = (url) => process.env.PUBLIC_BASE_URL || url.origin;
+const oauthRedirectUri = (url, provider) => `${publicOrigin(url)}/api/auth/oauth/${provider}/callback`;
+const oauthCookieName = (provider) => `jobbridge_oauth_${provider}`;
+const createOAuthState = () => crypto.randomBytes(24).toString("base64url");
+const createPkcePair = () => {
+  const verifier = crypto.randomBytes(32).toString("base64url");
+  return { verifier, challenge: crypto.createHash("sha256").update(verifier).digest("base64url") };
+};
+const createOAuthCookie = (provider, payload) =>
+  `${oauthCookieName(provider)}=${encodeURIComponent(JSON.stringify(payload))}; HttpOnly; SameSite=Lax; Path=/api/auth/oauth/${provider}/callback; Max-Age=600`;
+const clearOAuthCookie = (provider) =>
+  `${oauthCookieName(provider)}=; HttpOnly; SameSite=Lax; Path=/api/auth/oauth/${provider}/callback; Max-Age=0`;
+const parseCookies = (req) => Object.fromEntries(String(req.headers.cookie || "").split(";").map((item) => item.trim()).filter(Boolean).map((item) => {
+  const index = item.indexOf("=");
+  return [item.slice(0, index), decodeURIComponent(item.slice(index + 1))];
+}));
+const oauthCookiePayload = (req, provider) => {
+  try { return JSON.parse(parseCookies(req)[oauthCookieName(provider)] || "{}"); } catch { return {}; }
+};
+const fetchJson = async (url, options) => {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) throw Object.assign(new Error(data.error_description || data.error?.message || data.message || "Không thể hoàn tất OAuth"), { status: 502 });
+  return data;
+};
+const upsertOAuthUser = (profile) => {
+  const email = String(profile.email || `${profile.provider}-${profile.id}@jobbridge.local`).toLowerCase();
+  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  if (!user) {
+    const id = db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title) VALUES(?,?,?,?,?)")
+      .run(profile.name, email, hashPassword(createToken()), "candidate", "Ứng viên JobBridge").lastInsertRowid;
+    user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  }
+  return user;
+};
+const oauthSuccessPage = (res, provider, session) => {
+  const safe = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
+  res.set("Cache-Control", "no-store").set("Set-Cookie", clearOAuthCookie(provider)).type("html").send(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Đăng nhập JobBridge</title></head><body><script>
+    const user=${safe(session.user)}, token=${safe(session.token)};
+    const usersKey="jobbridge_spa_users", sessionKey="jobbridge_spa_session";
+    const users=JSON.parse(localStorage.getItem(usersKey)||"[]");
+    localStorage.setItem(usersKey,JSON.stringify(users.some(x=>Number(x.id)===Number(user.id))?users.map(x=>Number(x.id)===Number(user.id)?{...x,...user}:x):[...users,{...user,password:""}]));
+    localStorage.setItem(sessionKey,JSON.stringify(user)); localStorage.setItem("jobbridge_api_token",token); location.replace("/");
+  </script></body></html>`);
+};
+
 const writeAdminLog = ({
   adminId,
   action,
@@ -337,6 +384,71 @@ async function api(req, res, url) {
       status: "ok",
       database: "connected",
     });
+  }
+
+  if (req.method === "GET" && pathname === "/api/auth/oauth/google") {
+    if (!process.env.GOOGLE_CLIENT_ID) return fail(res, 501, "Chưa cấu hình GOOGLE_CLIENT_ID", "OAUTH_NOT_CONFIGURED");
+    const state = createOAuthState();
+    const target = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    target.search = new URLSearchParams({ client_id: process.env.GOOGLE_CLIENT_ID, redirect_uri: oauthRedirectUri(url, "google"), response_type: "code", scope: "openid email profile", prompt: "select_account", state });
+    return res.set("Set-Cookie", createOAuthCookie("google", { state })).redirect(target.toString());
+  }
+
+  if (req.method === "GET" && pathname === "/api/auth/oauth/zalo") {
+    if (!process.env.ZALO_APP_ID) return fail(res, 501, "Chưa cấu hình ZALO_APP_ID", "OAUTH_NOT_CONFIGURED");
+    const state = createOAuthState();
+    const pkce = createPkcePair();
+    const target = new URL("https://oauth.zaloapp.com/v4/permission");
+    target.search = new URLSearchParams({ app_id: process.env.ZALO_APP_ID, redirect_uri: oauthRedirectUri(url, "zalo"), state, code_challenge: pkce.challenge, code_challenge_method: "S256" });
+    return res.set("Set-Cookie", createOAuthCookie("zalo", { state, verifier: pkce.verifier })).redirect(target.toString());
+  }
+
+  if (req.method === "GET" && /^\/api\/auth\/oauth\/(google|zalo)\/callback$/.test(pathname)) {
+    const provider = pathname.split("/")[4];
+    const cookie = oauthCookiePayload(req, provider);
+    const code = searchParams.get("code");
+    if (!code || !searchParams.get("state") || searchParams.get("state") !== cookie.state) return fail(res, 403, "Phiên OAuth không hợp lệ hoặc đã hết hạn", "OAUTH_STATE_INVALID");
+    let profile;
+    if (provider === "google") {
+      const token = await fetchJson("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET || "", code, redirect_uri: oauthRedirectUri(url, "google"), grant_type: "authorization_code" }) });
+      const data = await fetchJson("https://openidconnect.googleapis.com/v1/userinfo", { headers: { Authorization: `Bearer ${token.access_token}` } });
+      profile = { provider, id: data.sub, name: data.name || data.email, email: data.email };
+    } else {
+      const token = await fetchJson("https://oauth.zaloapp.com/v4/access_token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", secret_key: process.env.ZALO_APP_SECRET || "" }, body: new URLSearchParams({ app_id: process.env.ZALO_APP_ID, code, grant_type: "authorization_code", code_verifier: cookie.verifier || "" }) });
+      const target = new URL("https://graph.zalo.me/v2.0/me"); target.searchParams.set("fields", "id,name,picture,email");
+      const data = await fetchJson(target, { headers: { access_token: token.access_token } });
+      profile = { provider, id: data.id, name: data.name || "Người dùng Zalo", email: data.email };
+    }
+    const user = upsertOAuthUser(profile);
+    const session = { ...issueSession(user.id), user: publicUser(db, user) };
+    return oauthSuccessPage(res, provider, session);
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/phone/send-otp") {
+    const data = await body(req);
+    const phone = String(data.phone || "").replace(/\s/g, "");
+    if (!/^(0|\+84)\d{9,10}$/.test(phone)) return fail(res, 422, "Số điện thoại không hợp lệ", "INVALID_PHONE");
+    const otp = process.env.NODE_ENV === "production" ? String(crypto.randomInt(100000, 1000000)) : "123456";
+    phoneOtpChallenges.set(phone, { hash: hashToken(otp), expiresAt: Date.now() + 300000, attempts: 0 });
+    return json(res, 200, { sent: true, expiresIn: 300, ...(process.env.NODE_ENV === "production" ? {} : { demoOtp: otp }) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/phone/verify-otp") {
+    const data = await body(req);
+    const phone = String(data.phone || "").replace(/\s/g, "");
+    const challenge = phoneOtpChallenges.get(phone);
+    if (!challenge || challenge.expiresAt < Date.now()) { phoneOtpChallenges.delete(phone); return fail(res, 410, "Mã OTP đã hết hạn", "OTP_EXPIRED"); }
+    challenge.attempts += 1;
+    if (challenge.attempts > 5 || hashToken(String(data.otp || "")) !== challenge.hash) return fail(res, 401, "Mã OTP không đúng", "INVALID_OTP");
+    phoneOtpChallenges.delete(phone);
+    let user = db.prepare("SELECT * FROM users WHERE phone = ?").get(phone);
+    if (!user) {
+      const id = db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title,phone) VALUES(?,?,?,?,?,?)")
+        .run(`Người dùng ${phone.slice(-4)}`, `phone-${phone}@jobbridge.local`, hashPassword(createToken()), "candidate", "Ứng viên JobBridge", phone).lastInsertRowid;
+      user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+    }
+    if (user.status === "Locked") return fail(res, 403, "Tài khoản đã bị khóa", "ACCOUNT_LOCKED");
+    return json(res, 200, { ...issueSession(user.id), user: publicUser(db, user) });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {
