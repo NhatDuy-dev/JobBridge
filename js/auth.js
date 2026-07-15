@@ -326,6 +326,7 @@ function isValidEmail(email) {
 
 function logout() {
   stopRealtimeUpdates();
+  unmountSupportChatbox();
   if (typeof clearApiToken === "function") clearApiToken();
   localStorage.removeItem(STORAGE_KEYS.session);
   appState.currentUser = null;
