@@ -2,6 +2,7 @@
 function renderCompanyView() {
   const root = document.querySelector("#dashboardRoot");
   if (!root) return;
+  decorateCompanyShell();
 
   if (appState.companyTab === "post") {
     appState.companyTab = "jobs";
@@ -60,6 +61,33 @@ function renderCompanyView() {
   });
   root.querySelector("[data-company-create-job]")?.addEventListener("click", () => openCompanyJobForm());
   renderCompanyTabContent();
+}
+
+function decorateCompanyShell() {
+  const topbar = document.querySelector(".spa-topbar");
+  const userBox = topbar?.querySelector(".spa-user-box");
+  if (topbar && userBox && !topbar.querySelector(".company-topbar-context")) {
+    const context = document.createElement("div");
+    context.className = "company-topbar-context";
+    context.innerHTML = `
+      <span class="company-topbar-context-icon">${companyIcon("briefcase")}</span>
+      <span class="company-topbar-context-copy"><strong>Trung tâm tuyển dụng</strong><small>Quản lý tin đăng và ứng viên</small></span>
+    `;
+    topbar.insertBefore(context, userBox);
+  }
+
+  const candidateFooter = document.querySelector('.site-footer-column[aria-label="Dành cho ứng viên"]');
+  if (candidateFooter) {
+    candidateFooter.className = "site-footer-column company-footer-information";
+    candidateFooter.setAttribute("aria-label", "Thông tin JobBridge");
+    candidateFooter.innerHTML = `
+      <h2>Thông tin JobBridge</h2>
+      <span>Giới thiệu nền tảng</span>
+      <span>Quy trình tuyển dụng</span>
+      <span>Tiêu chuẩn tin đăng</span>
+      <span>Câu hỏi thường gặp</span>
+    `;
+  }
 }
 
 function renderCompanyTabContent() {

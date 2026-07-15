@@ -41,7 +41,7 @@ function saveCompanyProfile(event) {
   const data = new FormData(form);
   const name = String(data.get("name") || "").trim();
   if (name.length < 2) {
-    showToast("Tên công ty cần ít nhất 2 ký tự.", "error");
+    showCompanyToast("Tên công ty cần ít nhất 2 ký tự.", "error");
     return;
   }
 
@@ -58,5 +58,5 @@ function saveCompanyProfile(event) {
   });
   renderDashboard();
   appState.companyTab = "profile";
-  showToast("Đã cập nhật hồ sơ công ty.", "success");
+  showCompanyToast("Đã cập nhật hồ sơ công ty.", "success");
 }

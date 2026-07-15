@@ -93,7 +93,7 @@ function renderCompanyApplicationTable(applications) {
 function openCompanyApplicationDetail(applicationId) {
   const application = companyApplications().find((item) => Number(item.id) === Number(applicationId));
   if (!application) {
-    showToast("Không tìm thấy hồ sơ ứng tuyển thuộc công ty.", "error");
+    showCompanyToast("Không tìm thấy hồ sơ ứng tuyển thuộc công ty.", "error");
     return;
   }
   const job = companyFindJob(application.jobId);
@@ -214,7 +214,7 @@ function hideCompanyApplicationForms(modal) {
 function scheduleCompanyInterview(applicationId, data) {
   const interviewDate = new Date(String(data.get("interviewAt") || ""));
   if (Number.isNaN(interviewDate.getTime())) {
-    showToast("Vui lòng chọn ngày và giờ phỏng vấn hợp lệ.", "error");
+    showCompanyToast("Vui lòng chọn ngày và giờ phỏng vấn hợp lệ.", "error");
     return;
   }
   updateCompanyApplication(applicationId, {
@@ -233,7 +233,7 @@ function rejectCompanyApplication(applicationId, data) {
   const stage = String(data.get("rejectionStage") || "profile");
   const reason = String(data.get("rejectionReason") || "").trim();
   if (!reason) {
-    showToast("Vui lòng nhập lý do xử lý hồ sơ.", "error");
+    showCompanyToast("Vui lòng nhập lý do xử lý hồ sơ.", "error");
     return;
   }
   updateCompanyApplication(applicationId, {
@@ -257,7 +257,7 @@ function hireCompanyApplication(applicationId) {
 function updateCompanyApplication(applicationId, changes, successMessage) {
   const ownedApplication = companyApplications().find((item) => Number(item.id) === Number(applicationId));
   if (!ownedApplication) {
-    showToast("Không tìm thấy hồ sơ ứng tuyển thuộc công ty.", "error");
+    showCompanyToast("Không tìm thấy hồ sơ ứng tuyển thuộc công ty.", "error");
     return;
   }
   const updatedAt = new Date().toISOString();
@@ -265,7 +265,7 @@ function updateCompanyApplication(applicationId, changes, successMessage) {
   companyPersistApplications();
   companyCloseModal();
   renderCompanyTabContent();
-  showToast(successMessage, "success");
+  showCompanyToast(successMessage, "success");
 }
 
 function companyApplicationStatusDetail(application) {

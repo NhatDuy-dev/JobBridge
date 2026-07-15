@@ -105,7 +105,7 @@ function bindCompanyJobActions(scope) {
 function openCompanyJobForm(jobId = null) {
   const job = jobId ? companyFindJob(jobId) : null;
   if (jobId && !job) {
-    showToast("Không tìm thấy tin tuyển dụng thuộc công ty.", "error");
+    showCompanyToast("Không tìm thấy tin tuyển dụng thuộc công ty.", "error");
     return;
   }
   const modal = companyOpenModal(`
@@ -185,7 +185,7 @@ function saveCompanyJob(event, existingJob) {
   companyPersistJobs();
   companyCloseModal();
   renderCompanyJobs();
-  showToast(existingJob ? "Đã cập nhật và gửi tin chờ duyệt lại." : "Đã tạo tin và gửi admin duyệt.", "success");
+  showCompanyToast(existingJob ? "Đã cập nhật và gửi tin chờ duyệt lại." : "Đã tạo tin và gửi admin duyệt.", "success");
 }
 
 function showCompanyJobFormMessage(message) {
@@ -210,7 +210,7 @@ function duplicateCompanyJob(jobId) {
   }));
   companyPersistJobs();
   renderCompanyJobs();
-  showToast("Đã nhân bản tin và chuyển sang chờ duyệt.", "success");
+  showCompanyToast("Đã nhân bản tin và chuyển sang chờ duyệt.", "success");
 }
 
 function toggleCompanyJob(jobId) {
@@ -220,7 +220,7 @@ function toggleCompanyJob(jobId) {
   appState.jobs = appState.jobs.map((item) => Number(item.id) === Number(job.id) ? { ...item, status: nextStatus, updatedAt: new Date().toISOString() } : item);
   companyPersistJobs();
   renderCompanyJobs();
-  showToast(nextStatus === "Closed" ? "Đã đóng tin tuyển dụng." : "Đã gửi tin chờ admin duyệt lại.", "success");
+  showCompanyToast(nextStatus === "Closed" ? "Đã đóng tin tuyển dụng." : "Đã gửi tin chờ admin duyệt lại.", "success");
 }
 
 function deleteCompanyJob(jobId) {
@@ -228,14 +228,14 @@ function deleteCompanyJob(jobId) {
   if (!job) return;
   const hasApplications = appState.applications.some((application) => Number(application.jobId) === Number(job.id));
   if (hasApplications) {
-    showToast("Không thể xóa tin đã có hồ sơ. Hãy đóng tin để giữ lịch sử tuyển dụng.", "error");
+    showCompanyToast("Không thể xóa tin đã có hồ sơ. Hãy đóng tin để giữ lịch sử tuyển dụng.", "error");
     return;
   }
   if (!window.confirm(`Xóa tin “${job.title}”? Thao tác này không thể hoàn tác.`)) return;
   appState.jobs = appState.jobs.filter((item) => Number(item.id) !== Number(job.id));
   companyPersistJobs();
   renderCompanyJobs();
-  showToast("Đã xóa tin tuyển dụng.", "success");
+  showCompanyToast("Đã xóa tin tuyển dụng.", "success");
 }
 
 function companyOption(value, label, selectedValue) {
