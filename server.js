@@ -11,12 +11,48 @@ const db = openDatabase(process.env.DB_PATH || undefined);
 const port = Number(process.env.PORT || 3000);
 const SESSION_DAYS = 7;
 const MAX_CV_FILE_SIZE = 5 * 1024 * 1024;
+const phoneOtpChallenges = new Map();
 
-const json = (res, status, data) => {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+const corsHeaders = (req) => {
+  const origin = req?.headers?.origin;
+  return origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+    ? { "Access-Control-Allow-Origin": origin, Vary: "Origin", "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS" }
+    : {};
+};
+const json = (res, status, data, req) => {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*", ...corsHeaders(req) });
   res.end(JSON.stringify(data));
 };
 const fail = (res, status, message, code = "REQUEST_ERROR") => json(res, status, { error: { code, message } });
+const redirect = (res, location, headers = {}) => {
+  res.writeHead(302, { Location: location, "Cache-Control": "no-store", ...headers });
+  res.end();
+};
+const publicOrigin = (url) => process.env.PUBLIC_BASE_URL || url.origin;
+const oauthRedirectUri = (url, provider) => `${publicOrigin(url)}/api/auth/oauth/${provider}/callback`;
+const createOAuthState = () => crypto.randomBytes(24).toString("base64url");
+const createPkcePair = () => {
+  const verifier = crypto.randomBytes(32).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+};
+const oauthCookieName = (provider) => `jobbridge_oauth_${provider}`;
+const createOAuthCookie = (provider, payload) =>
+  `${oauthCookieName(provider)}=${encodeURIComponent(JSON.stringify(payload))}; HttpOnly; SameSite=Lax; Path=/api/auth/oauth/${provider}/callback; Max-Age=600`;
+const clearOAuthCookie = (provider) =>
+  `${oauthCookieName(provider)}=; HttpOnly; SameSite=Lax; Path=/api/auth/oauth/${provider}/callback; Max-Age=0`;
+const parseCookies = (req) =>
+  Object.fromEntries(String(req.headers.cookie || "").split(";").map((item) => item.trim()).filter(Boolean).map((item) => {
+    const index = item.indexOf("=");
+    return index >= 0 ? [item.slice(0, index), decodeURIComponent(item.slice(index + 1))] : [item, ""];
+  }));
+const oauthPayloadFromCookie = (req, provider) => {
+  try {
+    return JSON.parse(parseCookies(req)[oauthCookieName(provider)] || "{}");
+  } catch {
+    return {};
+  }
+};
 const body = async (req) => {
   let raw = "";
   for await (const chunk of req) {
@@ -61,10 +97,222 @@ const issueSession = (userId) => {
   db.prepare("INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)").run(crypto.randomUUID(), userId, hashToken(token), expires);
   return { token, expiresAt: expires };
 };
+const safeJson = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
+const oauthSessionPage = (res, provider, session) => {
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Set-Cookie": clearOAuthCookie(provider),
+  });
+  res.end(`<!doctype html>
+<html lang="vi">
+  <head><meta charset="utf-8"><title>Đang đăng nhập JobBridge</title></head>
+  <body>
+    <script>
+      const user = ${safeJson(session.user)};
+      const apiToken = ${safeJson(session.token)};
+      const usersKey = "jobbridge_spa_users";
+      const sessionKey = "jobbridge_spa_session";
+      const apiTokenKey = "jobbridge_api_token";
+      const users = JSON.parse(localStorage.getItem(usersKey) || "[]");
+      const nextUsers = users.some((item) => Number(item.id) === Number(user.id))
+        ? users.map((item) => Number(item.id) === Number(user.id) ? { ...item, ...user } : item)
+        : [...users, { ...user, password: "" }];
+      localStorage.setItem(usersKey, JSON.stringify(nextUsers));
+      localStorage.setItem(sessionKey, JSON.stringify(user));
+      localStorage.setItem(apiTokenKey, apiToken);
+      window.location.replace("/");
+    </script>
+  </body>
+</html>`);
+};
+const fetchJson = async (url, options) => {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!response.ok || data.error) {
+    const message = data.error_description || data.error?.message || data.message || "Không thể hoàn tất OAuth";
+    throw Object.assign(new Error(message), { status: 502 });
+  }
+  return data;
+};
+const exchangeGoogleProfile = async (url, code) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw Object.assign(new Error("Chưa cấu hình GOOGLE_CLIENT_ID và GOOGLE_CLIENT_SECRET"), { status: 501 });
+  const token = await fetchJson("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: oauthRedirectUri(url, "google"),
+      grant_type: "authorization_code",
+    }),
+  });
+  const profile = await fetchJson("https://openidconnect.googleapis.com/v1/userinfo", {
+    headers: { Authorization: `Bearer ${token.access_token}` },
+  });
+  return {
+    provider: "google",
+    providerId: profile.sub,
+    name: profile.name || profile.email || "Người dùng Google",
+    email: profile.email || `google-${profile.sub}@jobbridge.local`,
+  };
+};
+const exchangeFacebookProfile = async (url, code) => {
+  const clientId = process.env.FACEBOOK_APP_ID;
+  const clientSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!clientId || !clientSecret) throw Object.assign(new Error("Chưa cấu hình FACEBOOK_APP_ID và FACEBOOK_APP_SECRET"), { status: 501 });
+  const tokenUrl = new URL("https://graph.facebook.com/v23.0/oauth/access_token");
+  tokenUrl.searchParams.set("client_id", clientId);
+  tokenUrl.searchParams.set("client_secret", clientSecret);
+  tokenUrl.searchParams.set("redirect_uri", oauthRedirectUri(url, "facebook"));
+  tokenUrl.searchParams.set("code", code);
+  const token = await fetchJson(tokenUrl);
+  const profileUrl = new URL("https://graph.facebook.com/me");
+  profileUrl.searchParams.set("fields", "id,name,email");
+  profileUrl.searchParams.set("access_token", token.access_token);
+  const profile = await fetchJson(profileUrl);
+  return {
+    provider: "facebook",
+    providerId: profile.id,
+    name: profile.name || "Người dùng Facebook",
+    email: profile.email || `facebook-${profile.id}@jobbridge.local`,
+  };
+};
+const exchangeZaloProfile = async (code, verifier) => {
+  const appId = process.env.ZALO_APP_ID;
+  const appSecret = process.env.ZALO_APP_SECRET;
+  if (!appId || !appSecret) throw Object.assign(new Error("Chưa cấu hình ZALO_APP_ID và ZALO_APP_SECRET"), { status: 501 });
+  const params = new URLSearchParams({ app_id: appId, code, grant_type: "authorization_code" });
+  if (verifier) params.set("code_verifier", verifier);
+  const token = await fetchJson("https://oauth.zaloapp.com/v4/access_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", secret_key: appSecret },
+    body: params,
+  });
+  const profileUrl = new URL("https://graph.zalo.me/v2.0/me");
+  profileUrl.searchParams.set("fields", "id,name,picture,email");
+  const profile = await fetchJson(profileUrl, { headers: { access_token: token.access_token } });
+  return {
+    provider: "zalo",
+    providerId: profile.id,
+    name: profile.name || "Người dùng Zalo",
+    email: profile.email || `zalo-${profile.id}@jobbridge.local`,
+  };
+};
+const upsertOAuthUser = (profile) => {
+  const email = String(profile.email || `${profile.provider}-${profile.providerId}@jobbridge.local`).trim().toLowerCase();
+  let user = db.prepare("SELECT * FROM users WHERE email=?").get(email);
+  if (!user) {
+    const id = db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title) VALUES(?,?,?,?,?)")
+      .run(profile.name, email, hashPassword(createToken()), "candidate", "Ứng viên JobBridge").lastInsertRowid;
+    user = db.prepare("SELECT * FROM users WHERE id=?").get(id);
+  }
+  return user;
+};
 
 async function api(req, res, url) {
   const { pathname, searchParams } = url;
-  if (req.method === "GET" && pathname === "/api/health") return json(res, 200, { status: "ok", database: "connected" });
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, corsHeaders(req));
+    return res.end();
+  }
+  if (req.method === "GET" && pathname === "/api/health") return json(res, 200, { status: "ok", database: "connected" }, req);
+
+  if (req.method === "GET" && pathname === "/api/auth/oauth/google") {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) return fail(res, 501, "Chưa cấu hình GOOGLE_CLIENT_ID cho đăng nhập Google OAuth", "OAUTH_NOT_CONFIGURED");
+    const state = createOAuthState();
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", oauthRedirectUri(url, "google"));
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", "openid email profile");
+    authUrl.searchParams.set("prompt", "select_account");
+    authUrl.searchParams.set("state", state);
+    return redirect(res, authUrl.toString(), { "Set-Cookie": createOAuthCookie("google", { state }) });
+  }
+
+  if (req.method === "GET" && pathname === "/api/auth/oauth/facebook") {
+    const appId = process.env.FACEBOOK_APP_ID;
+    if (!appId) return fail(res, 501, "Chưa cấu hình FACEBOOK_APP_ID cho đăng nhập Facebook OAuth", "OAUTH_NOT_CONFIGURED");
+    const state = createOAuthState();
+    const authUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
+    authUrl.searchParams.set("client_id", appId);
+    authUrl.searchParams.set("redirect_uri", oauthRedirectUri(url, "facebook"));
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", "email,public_profile");
+    authUrl.searchParams.set("state", state);
+    return redirect(res, authUrl.toString(), { "Set-Cookie": createOAuthCookie("facebook", { state }) });
+  }
+
+  if (req.method === "GET" && pathname === "/api/auth/oauth/zalo") {
+    const appId = process.env.ZALO_APP_ID;
+    if (!appId) return fail(res, 501, "Chưa cấu hình ZALO_APP_ID cho đăng nhập Zalo OAuth", "OAUTH_NOT_CONFIGURED");
+    const state = createOAuthState();
+    const pkce = createPkcePair();
+    const authUrl = new URL("https://oauth.zaloapp.com/v4/permission");
+    authUrl.searchParams.set("app_id", appId);
+    authUrl.searchParams.set("redirect_uri", oauthRedirectUri(url, "zalo"));
+    authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("code_challenge", pkce.challenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    return redirect(res, authUrl.toString(), { "Set-Cookie": createOAuthCookie("zalo", { state, verifier: pkce.verifier }) });
+  }
+
+  if (req.method === "GET" && /^\/api\/auth\/oauth\/(google|facebook|zalo)\/callback$/.test(pathname)) {
+    const provider = pathname.match(/^\/api\/auth\/oauth\/(google|facebook|zalo)\/callback$/)[1];
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const cookiePayload = oauthPayloadFromCookie(req, provider);
+    if (!code) return fail(res, 422, "Thiếu mã OAuth từ nhà cung cấp", "OAUTH_CODE_REQUIRED");
+    if (!state || state !== cookiePayload.state) return fail(res, 403, "Phiên OAuth không hợp lệ hoặc đã hết hạn", "OAUTH_STATE_INVALID");
+    const profile = provider === "google"
+      ? await exchangeGoogleProfile(url, code)
+      : provider === "facebook"
+        ? await exchangeFacebookProfile(url, code)
+        : await exchangeZaloProfile(code, cookiePayload.verifier);
+    const user = upsertOAuthUser(profile);
+    const session = issueSession(user.id);
+    return oauthSessionPage(res, provider, { ...session, user: publicUser(db, user) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/phone/send-otp") {
+    const data = await body(req);
+    const phone = String(data.phone || "").replace(/[^\d+]/g, "");
+    if (!/^(0|\+84)\d{9,10}$/.test(phone)) return fail(res, 422, "Số điện thoại không hợp lệ", "INVALID_PHONE");
+    const otp = process.env.NODE_ENV === "production" ? String(crypto.randomInt(100000, 1000000)) : "123456";
+    phoneOtpChallenges.set(phone, { hash: hashToken(otp), expiresAt: Date.now() + 5 * 60_000, attempts: 0 });
+    // Tích hợp nhà cung cấp SMS tại đây khi triển khai production.
+    return json(res, 200, { sent: true, expiresIn: 300, ...(process.env.NODE_ENV === "production" ? {} : { demoOtp: otp }) }, req);
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/phone/verify-otp") {
+    const data = await body(req);
+    const phone = String(data.phone || "").replace(/[^\d+]/g, "");
+    const challenge = phoneOtpChallenges.get(phone);
+    if (!challenge || challenge.expiresAt < Date.now()) {
+      phoneOtpChallenges.delete(phone);
+      return fail(res, 410, "Mã OTP đã hết hạn, vui lòng gửi lại", "OTP_EXPIRED");
+    }
+    challenge.attempts += 1;
+    if (challenge.attempts > 5 || hashToken(String(data.otp || "")) !== challenge.hash) {
+      if (challenge.attempts > 5) phoneOtpChallenges.delete(phone);
+      return fail(res, 401, "Mã OTP không đúng", "INVALID_OTP");
+    }
+    phoneOtpChallenges.delete(phone);
+    let user = db.prepare("SELECT * FROM users WHERE phone=?").get(phone);
+    if (!user) {
+      const id = db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title,phone) VALUES(?,?,?,?,?,?)")
+        .run(`Người dùng ${phone.slice(-4)}`, `phone-${phone}@jobbridge.local`, hashPassword(createToken()), "candidate", "Ứng viên JobBridge", phone).lastInsertRowid;
+      user = db.prepare("SELECT * FROM users WHERE id=?").get(id);
+    }
+    return json(res, 200, { ...issueSession(user.id), user: publicUser(db, user) }, req);
+  }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {
     const data = await body(req);

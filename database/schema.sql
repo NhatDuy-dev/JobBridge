@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('candidate', 'employer', 'admin')),
   phone TEXT NOT NULL DEFAULT '',
-  location TEXT NOT NULL DEFAULT '',
+  location TEXT NOT NULL DEFAULT '', 
   desired_title TEXT NOT NULL DEFAULT '',
   date_of_birth TEXT,
   gender TEXT NOT NULL DEFAULT '',
