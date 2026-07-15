@@ -1634,13 +1634,22 @@ function renderAdminJobsContent() {
           </p>
         </div>
 
-        <button
-          type="button"
-          id="refreshAdminJobsButton"
-          class="secondary-button admin-refresh-button"
-        >
-          Làm mới
-        </button>
+        <div class="admin-heading-actions">
+          <button
+            type="button"
+            id="exportAdminJobsButton"
+            class="secondary-button admin-refresh-button"
+          >
+            Xuất CSV
+          </button>
+          <button
+            type="button"
+            id="refreshAdminJobsButton"
+            class="secondary-button admin-refresh-button"
+          >
+            Làm mới
+          </button>
+        </div>
       </div>
 
       <div class="admin-job-stat-grid">
@@ -1937,15 +1946,9 @@ function renderAdminApplicationRow(application) {
             Chi tiết
           </button>
 
-          <button
-            type="button"
-            class="compact-button"
-            data-admin-change-application-status="${Number(
-              application.id,
-            )}"
-          >
-            Đổi trạng thái
-          </button>
+          <span class="admin-self-label">
+            Do doanh nghiệp xử lý
+          </span>
         </div>
       </td>
     </tr>
@@ -1968,8 +1971,8 @@ function renderAdminApplicationsContent() {
         <div>
           <h2>Quản lý hồ sơ ứng tuyển</h2>
           <p class="admin-users-description">
-    Theo dõi ứng viên, tin tuyển dụng và tiến trình tuyển dụng.
-</p>
+            Admin chỉ theo dõi; doanh nghiệp chịu trách nhiệm xử lý hồ sơ.
+          </p>
         </div>
 
         <button
@@ -2244,77 +2247,6 @@ function openAdminApplicationDetail(applicationId) {
   );
 }
 
-async function changeAdminApplicationStatus(applicationId) {
-  const application =
-    findAdminApplicationById(applicationId);
-
-  if (!application) {
-    showToast(
-      "Không tìm thấy hồ sơ ứng tuyển.",
-      "error",
-    );
-    return;
-  }
-
-  const nextStatus = window
-    .prompt(
-      [
-        "Nhập một trong các trạng thái sau:",
-        "Da nop",
-        "Len lich phong van",
-        "Da tuyen",
-        "Tu choi",
-      ].join("\n"),
-      application.status || "Da nop",
-    )
-    ?.trim();
-
-  if (!nextStatus) {
-    return;
-  }
-
-  const allowedStatuses = [
-    "Da nop",
-    "Len lich phong van",
-    "Da tuyen",
-    "Tu choi",
-  ];
-
-  if (!allowedStatuses.includes(nextStatus)) {
-    showToast(
-      "Trạng thái không hợp lệ.",
-      "error",
-    );
-    return;
-  }
-
-  try {
-    await apiRequest(
-      `/applications/${Number(
-        applicationId,
-      )}/status`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: nextStatus,
-        }),
-      },
-    );
-
-    await showAdminTab("applications");
-
-    showToast(
-      "Đã cập nhật trạng thái hồ sơ.",
-      "success",
-    );
-  } catch (error) {
-    showToast(
-      error.message ||
-        "Không thể cập nhật trạng thái hồ sơ.",
-      "error",
-    );
-  }
-}
 function bindAdminCompanyEvents() {
   document
     .querySelector("#adminCompanyFilterForm")
@@ -2461,23 +2393,6 @@ function bindAdminApplicationEvents() {
       );
     });
 
-  document
-    .querySelectorAll(
-      "[data-admin-change-application-status]",
-    )
-    .forEach((button) => {
-      button.addEventListener(
-        "click",
-        async () => {
-          await changeAdminApplicationStatus(
-            Number(
-              button.dataset
-                .adminChangeApplicationStatus,
-            ),
-          );
-        },
-      );
-    });
 }
 function getAdminReportStatusLabel(status) {
   const labels = {
@@ -4212,6 +4127,10 @@ function bindAdminUserEvents() {
 
 function bindAdminJobEvents() {
   document
+    .querySelector("#exportAdminJobsButton")
+    ?.addEventListener("click", exportAdminJobsCsv);
+
+  document
     .querySelector("#adminJobFilterForm")
     ?.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -4307,6 +4226,42 @@ function bindAdminJobEvents() {
         }
       });
     });
+}
+
+function exportAdminJobsCsv() {
+  const jobs = appState.adminJobs || [];
+  if (!jobs.length) {
+    showToast("Không có tin tuyển dụng để xuất.", "error");
+    return;
+  }
+
+  const rows = [
+    ["ID", "Tiêu đề", "Công ty", "Địa điểm", "Loại", "Trạng thái", "Mức lương", "Ngày tạo"],
+    ...jobs.map((job) => [
+      job.id,
+      job.title,
+      job.company,
+      job.location,
+      job.type,
+      getAdminJobStatusLabel(job.status),
+      job.salary,
+      job.createdAt || job.created_at || "",
+    ]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(formatAdminCsvCell).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `jobbridge-tin-tuyen-dung-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Đã xuất ${jobs.length} tin tuyển dụng.`, "success");
+}
+
+function formatAdminCsvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
 function openAdminJobDetail(jobId) {
