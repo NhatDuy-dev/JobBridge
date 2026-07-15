@@ -79,8 +79,8 @@ function renderCompanyApplicationTable(applications) {
               <td data-label="Ứng viên"><div class="company-candidate-cell"><span class="company-avatar">${escapeHtml(getInitials(application.candidateName || candidate?.name || "UV"))}</span><div><strong>${escapeHtml(application.candidateName || candidate?.name || "Ứng viên")}</strong><small>${escapeHtml(candidate?.email || application.cvName || "Hồ sơ JobBridge")}</small></div></div></td>
               <td data-label="Vị trí"><strong>${escapeHtml(job?.title || application.jobTitle || "Tin tuyển dụng")}</strong><small class="company-cell-secondary">${escapeHtml(application.cvName || "CV ứng tuyển")}</small></td>
               <td data-label="Ngày nộp"><time>${escapeHtml(formatDate(application.appliedAt))}</time></td>
-              <td data-label="Trạng thái">${companyStatusBadge(application.status, "application")}</td>
-              <td class="company-table-action-single"><button class="company-button company-button-secondary company-button-small" data-application-detail="${application.id}" type="button">${companyIcon("eye")}Xem hồ sơ</button></td>
+              <td data-label="Trạng thái"><div class="company-application-status-cell">${companyStatusBadge(application.status, "application")}<small class="${application.reviewedAt ? "reviewed" : "unreviewed"}">${application.reviewedAt ? "Đã xem hồ sơ" : "Chưa xem hồ sơ"}</small></div></td>
+              <td class="company-table-action-single"><button class="company-button company-button-secondary company-button-small" data-application-detail="${application.id}" type="button">${companyIcon("eye")}${application.reviewedAt ? "Xem lại hồ sơ" : "Xem hồ sơ"}</button></td>
             </tr>
           `;
         }).join("")}</tbody>
@@ -97,6 +97,7 @@ function openCompanyApplicationDetail(applicationId) {
   }
   const job = companyFindJob(application.jobId);
   const candidate = companyFindCandidate(application.candidateId);
+  const isReviewed = Boolean(application.reviewedAt);
   const modal = companyOpenModal(`
     <header class="company-modal-header">
       <div><p>Chi tiết hồ sơ</p><h2>${escapeHtml(application.candidateName || candidate?.name || "Ứng viên")}</h2></div>
@@ -113,16 +114,40 @@ function openCompanyApplicationDetail(applicationId) {
       </div>
       <section class="company-cover-letter"><h3>Thư giới thiệu</h3><p>${escapeHtml(application.coverLetter || "Ứng viên chưa gửi thư giới thiệu.")}</p></section>
       <form id="companyApplicationStatusForm" class="company-status-form">
-        <label>Trạng thái xử lý<select name="status">${COMPANY_APPLICATION_STATUSES.map((status) => companyOption(status.value, status.label, application.status)).join("")}</select></label>
-        <button class="company-button company-button-primary" type="submit">${companyIcon("check")}Cập nhật trạng thái</button>
+        <div class="company-review-gate ${isReviewed ? "reviewed" : ""}">
+          <label><input id="companyApplicationReviewed" type="checkbox" ${isReviewed ? "checked disabled" : ""} /> Tôi xác nhận đã xem hồ sơ và CV ứng viên</label>
+          <p id="companyReviewMessage">${isReviewed ? `Đã xem hồ sơ ngày ${escapeHtml(formatDate(application.reviewedAt))}.` : "Xác nhận đã xem hồ sơ để mở các thao tác duyệt, phỏng vấn hoặc từ chối."}</p>
+        </div>
+        <label>Trạng thái xử lý<select name="status" ${isReviewed ? "" : "disabled"}>${COMPANY_APPLICATION_STATUSES.map((status) => companyOption(status.value, status.label, application.status)).join("")}</select></label>
+        <button class="company-button company-button-primary" type="submit" ${isReviewed ? "" : "disabled"}>${companyIcon("check")}Cập nhật kết quả</button>
       </form>
     </div>
   `, "company-modal-large");
-  modal.querySelector("#companyApplicationStatusForm")?.addEventListener("submit", (event) => {
+  const statusForm = modal.querySelector("#companyApplicationStatusForm");
+  modal.querySelector("#companyApplicationReviewed")?.addEventListener("change", (event) => {
+    if (!event.currentTarget.checked) return;
+    markCompanyApplicationReviewed(application.id);
+    event.currentTarget.disabled = true;
+    statusForm.querySelector('select[name="status"]').disabled = false;
+    statusForm.querySelector('button[type="submit"]').disabled = false;
+    statusForm.querySelector(".company-review-gate").classList.add("reviewed");
+    statusForm.querySelector("#companyReviewMessage").textContent = "Đã xác nhận xem hồ sơ. Bạn có thể cập nhật kết quả xử lý.";
+  });
+  statusForm?.addEventListener("submit", (event) => {
     event.preventDefault();
     const status = new FormData(event.currentTarget).get("status");
     updateCompanyApplicationStatus(application.id, status);
   });
+}
+
+function markCompanyApplicationReviewed(applicationId) {
+  const reviewedAt = new Date().toISOString();
+  appState.applications = appState.applications.map((application) =>
+    Number(application.id) === Number(applicationId) && !application.reviewedAt
+      ? { ...application, reviewedAt, updatedAt: reviewedAt }
+      : application,
+  );
+  companyPersistApplications();
 }
 
 function updateCompanyApplicationStatus(applicationId, status) {
@@ -132,6 +157,10 @@ function updateCompanyApplicationStatus(applicationId, status) {
   }
   const ownedApplication = companyApplications().find((item) => Number(item.id) === Number(applicationId));
   if (!ownedApplication) return;
+  if (!ownedApplication.reviewedAt) {
+    showToast("Vui lòng xem và xác nhận hồ sơ ứng viên trước khi duyệt.", "error");
+    return;
+  }
   appState.applications = appState.applications.map((application) => Number(application.id) === Number(ownedApplication.id) ? { ...application, status, updatedAt: new Date().toISOString() } : application);
   companyPersistApplications();
   companyCloseModal();

@@ -8,7 +8,7 @@ const COMPANY_TAB_CONFIG = {
 
 const COMPANY_APPLICATION_STATUSES = [
   { value: "Da nop", label: "Mới nhận" },
-  { value: "Len lich phong van", label: "Phỏng vấn" },
+  { value: "Len lich phong van", label: "Đã duyệt - Phỏng vấn" },
   { value: "Da tuyen", label: "Đã tuyển" },
   { value: "Tu choi", label: "Từ chối" },
 ];
