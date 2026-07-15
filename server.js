@@ -2843,6 +2843,11 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(root, "html", "index.html"));
 });
 
+// Chuyển các URL cũ do Live Server/VS Code tạo về URL chuẩn của ứng dụng.
+app.get(["/html/index.html", "/*path/html/index.html"], (req, res) => {
+  res.redirect(302, "/");
+});
+
 for (const directory of ["assets", "css", "html", "js"]) {
   app.use(
     `/${directory}`,

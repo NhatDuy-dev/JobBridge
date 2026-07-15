@@ -9,7 +9,20 @@ document.addEventListener("DOMContentLoaded", initApp);
 window.addEventListener("storage", handleRealtimeStorageUpdate);
 window.addEventListener("popstate", handleCandidateRouteChange);
 
-function initApp() {
+async function initApp() {
+  if (window.location.port !== "3000") {
+    window.location.replace(`http://localhost:3000${window.location.pathname === "/html/index.html" ? "/" : window.location.pathname}${window.location.search}${window.location.hash}`);
+    return;
+  }
+
+  // Luôn bắt đầu từ màn hình đăng nhập khi mở hoặc tải lại ứng dụng.
+  // Callback OAuth được giữ lại để service có thể hoàn tất phiên đăng nhập.
+  const isOAuthCallback = new URL(window.location.href).searchParams.has("auth_code");
+  if (!isOAuthCallback) {
+    localStorage.removeItem(STORAGE_KEYS.session);
+    localStorage.removeItem("jobbridge_api_token");
+  }
+
   bootMockDatabase();
   appState.users = readStorage(STORAGE_KEYS.users, seedUsers).map(normalizeUser);
   appState.jobs = readStorage(STORAGE_KEYS.jobs, seedJobs).map(normalizeJob);
@@ -25,6 +38,7 @@ function initApp() {
   writeStorage(STORAGE_KEYS.cvs, appState.cvs);
   writeStorage(STORAGE_KEYS.reports, appState.reports);
 
+  if (await consumeOAuthCallback()) return;
   if (appState.currentUser) renderDashboard();
   else renderLogin();
 }
