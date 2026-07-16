@@ -11,137 +11,11 @@ import {
 } from "./src/auth.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const db = openDatabase(process.env.DB_PATH || undefined);
+const db = await openDatabase(process.env.DATABASE_URL);
 const port = Number(process.env.PORT || 3000);
 const SESSION_DAYS = 7;
 const app = express();
 const phoneOtpChallenges = new Map();
-
-function ensureAdminSchema() {
-  const userColumns = new Set(
-    db.prepare("PRAGMA table_info(users)").all().map((column) => column.name),
-  );
-
-  if (!userColumns.has("status")) {
-    db.exec(`
-      ALTER TABLE users
-      ADD COLUMN status TEXT NOT NULL DEFAULT 'Active'
-      CHECK (status IN ('Active', 'Locked'));
-    `);
-  }
-
-  if (!userColumns.has("locked_reason")) {
-    db.exec(`
-      ALTER TABLE users
-      ADD COLUMN locked_reason TEXT NOT NULL DEFAULT '';
-    `);
-  }
-
-  if (!userColumns.has("locked_at")) {
-    db.exec(`
-      ALTER TABLE users
-      ADD COLUMN locked_at TEXT;
-    `);
-  }
-
-  if (!userColumns.has("last_login_at")) {
-    db.exec(`
-      ALTER TABLE users
-      ADD COLUMN last_login_at TEXT;
-    `);
-  }
-
-  const adminLogColumns = new Set(
-    db
-      .prepare("PRAGMA table_info(admin_logs)")
-      .all()
-      .map((column) => column.name),
-  );
-
-  const requiredAdminLogColumns = [
-    "id",
-    "admin_id",
-    "action",
-    "entity_type",
-    "entity_id",
-    "old_value",
-    "new_value",
-    "note",
-    "created_at",
-  ];
-
-  if (
-    adminLogColumns.size > 0 &&
-    requiredAdminLogColumns.some(
-      (column) => !adminLogColumns.has(column),
-    )
-  ) {
-    db.exec("DROP TABLE admin_logs;");
-  }
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS admin_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      action TEXT NOT NULL,
-      entity_type TEXT NOT NULL DEFAULT '',
-      entity_id INTEGER,
-      old_value TEXT NOT NULL DEFAULT '',
-      new_value TEXT NOT NULL DEFAULT '',
-      note TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_users_role_status
-    ON users(role, status);
-
-    CREATE INDEX IF NOT EXISTS idx_admin_logs_created
-    ON admin_logs(created_at DESC);
-  `);
-  const existingAdminLogCount = db
-  .prepare(`
-    SELECT COUNT(*) AS total
-    FROM admin_logs
-  `)
-  .get().total;
-
-if (existingAdminLogCount === 0) {
-  const firstAdmin = db
-    .prepare(`
-      SELECT id
-      FROM users
-      WHERE role = 'admin'
-      ORDER BY id ASC
-      LIMIT 1
-    `)
-    .get();
-
-  if (firstAdmin) {
-    db.prepare(`
-      INSERT INTO admin_logs (
-        admin_id,
-        action,
-        entity_type,
-        entity_id,
-        old_value,
-        new_value,
-        note
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      firstAdmin.id,
-      "LOGIN",
-      "Admin",
-      firstAdmin.id,
-      "",
-      "",
-      "Khởi tạo nhật ký quản trị hệ thống",
-    );
-  }
-}
-}
-
-ensureAdminSchema();
 
 const json = (res, status, data) => {
   res.status(status).set("Cache-Control", "no-store");
@@ -200,25 +74,25 @@ const mapNotification = (notification) => ({
   createdAt: notification.created_at,
 });
 
-const userByToken = (req) => {
+const userByToken = async (req) => {
   const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
 
   if (!token) {
     return null;
   }
 
-  return db.prepare(`
+  return await db.prepare(`
     SELECT u.*
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE
       s.token_hash = ?
-      AND s.expires_at > datetime('now')
+      AND s.expires_at > CURRENT_TIMESTAMP
   `).get(hashToken(token));
 };
 
-const requireUser = (req, res, roles) => {
-  const user = userByToken(req);
+const requireUser = async (req, res, roles) => {
+  const user = await userByToken(req);
 
   if (!user) {
     fail(res, 401, "Vui lòng đăng nhập", "UNAUTHORIZED");
@@ -243,17 +117,17 @@ const requireUser = (req, res, roles) => {
   return user;
 };
 
-const issueSession = (userId) => {
+const issueSession = async (userId) => {
   const token = createToken();
   const expires = new Date(
     Date.now() + SESSION_DAYS * 86_400_000,
   ).toISOString();
 
-  db.prepare(
-    "DELETE FROM sessions WHERE expires_at <= datetime('now')",
+  await db.prepare(
+    "DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP",
   ).run();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO sessions(
       id,
       user_id,
@@ -299,13 +173,13 @@ const fetchJson = async (url, options) => {
   if (!response.ok || data.error) throw Object.assign(new Error(data.error_description || data.error?.message || data.message || "Không thể hoàn tất OAuth"), { status: 502 });
   return data;
 };
-const upsertOAuthUser = (profile) => {
+const upsertOAuthUser = async (profile) => {
   const email = String(profile.email || `${profile.provider}-${profile.id}@jobbridge.local`).toLowerCase();
-  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  let user = await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?)").get(email);
   if (!user) {
-    const id = db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title) VALUES(?,?,?,?,?)")
-      .run(profile.name, email, hashPassword(createToken()), "candidate", "Ứng viên JobBridge").lastInsertRowid;
-    user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+    const id = (await db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title) VALUES(?,?,?,?,?)")
+      .run(profile.name, email, hashPassword(createToken()), "candidate", "Ứng viên JobBridge")).lastInsertRowid;
+    user = await db.prepare("SELECT * FROM users WHERE id = ?").get(id);
   }
   return user;
 };
@@ -320,7 +194,7 @@ const oauthSuccessPage = (res, provider, session) => {
   </script></body></html>`);
 };
 
-const writeAdminLog = ({
+const writeAdminLog = async ({
   adminId,
   action,
   entityType,
@@ -339,7 +213,7 @@ const writeAdminLog = ({
       ? newValue
       : JSON.stringify(newValue);
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO admin_logs(
       admin_id,
       action,
@@ -361,8 +235,8 @@ const writeAdminLog = ({
   );
 };
 
-function selectAdminUserById(userId) {
-  return db.prepare(`
+async function selectAdminUserById(userId) {
+  return await db.prepare(`
     SELECT
       id,
       name,
@@ -370,19 +244,19 @@ function selectAdminUserById(userId) {
       role,
       phone,
       location,
-      desired_title AS desiredTitle,
-      date_of_birth AS dateOfBirth,
+      desired_title AS "desiredTitle",
+      date_of_birth AS "dateOfBirth",
       gender,
-      experience_level AS experienceLevel,
+      experience_level AS "experienceLevel",
       education,
       portfolio,
       summary,
       status,
-      locked_reason AS lockedReason,
-      locked_at AS lockedAt,
-      last_login_at AS lastLoginAt,
-      created_at AS createdAt,
-      updated_at AS updatedAt
+      locked_reason AS "lockedReason",
+      locked_at AS "lockedAt",
+      last_login_at AS "lastLoginAt",
+      created_at AS "createdAt",
+      updated_at AS "updatedAt"
     FROM users
     WHERE id = ?
   `).get(userId);
@@ -431,8 +305,8 @@ async function api(req, res, url) {
       const data = await fetchJson(target, { headers: { access_token: token.access_token } });
       profile = { provider, id: data.id, name: data.name || "Người dùng Zalo", email: data.email };
     }
-    const user = upsertOAuthUser(profile);
-    const session = { ...issueSession(user.id), user: publicUser(db, user) };
+    const user = await upsertOAuthUser(profile);
+    const session = { ...await issueSession(user.id), user: await publicUser(db, user) };
     return oauthSuccessPage(res, provider, session);
   }
 
@@ -453,14 +327,14 @@ async function api(req, res, url) {
     challenge.attempts += 1;
     if (challenge.attempts > 5 || hashToken(String(data.otp || "")) !== challenge.hash) return fail(res, 401, "Mã OTP không đúng", "INVALID_OTP");
     phoneOtpChallenges.delete(phone);
-    let user = db.prepare("SELECT * FROM users WHERE phone = ?").get(phone);
+    let user = await db.prepare("SELECT * FROM users WHERE phone = ?").get(phone);
     if (!user) {
-      const id = db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title,phone) VALUES(?,?,?,?,?,?)")
-        .run(`Người dùng ${phone.slice(-4)}`, `phone-${phone}@jobbridge.local`, hashPassword(createToken()), "candidate", "Ứng viên JobBridge", phone).lastInsertRowid;
-      user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+      const id = (await db.prepare("INSERT INTO users(name,email,password_hash,role,desired_title,phone) VALUES(?,?,?,?,?,?)")
+        .run(`Người dùng ${phone.slice(-4)}`, `phone-${phone}@jobbridge.local`, hashPassword(createToken()), "candidate", "Ứng viên JobBridge", phone)).lastInsertRowid;
+      user = await db.prepare("SELECT * FROM users WHERE id = ?").get(id);
     }
     if (user.status === "Locked") return fail(res, 403, "Tài khoản đã bị khóa", "ACCOUNT_LOCKED");
-    return json(res, 200, { ...issueSession(user.id), user: publicUser(db, user) });
+    return json(res, 200, { ...await issueSession(user.id), user: await publicUser(db, user) });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {
@@ -493,7 +367,7 @@ async function api(req, res, url) {
     }
 
     try {
-      const userId = db.prepare(`
+      const userId = (await db.prepare(`
         INSERT INTO users(
           name,
           email,
@@ -506,21 +380,20 @@ async function api(req, res, url) {
         email,
         hashPassword(password),
         role,
-      ).lastInsertRowid;
+      )).lastInsertRowid;
 
-      const session = issueSession(userId);
-      const user = db
+      const session = await issueSession(userId);
+      const user = await db
         .prepare("SELECT * FROM users WHERE id = ?")
         .get(userId);
 
       return json(res, 201, {
         ...session,
-        user: publicUser(db, user),
+        user: await publicUser(db, user),
       });
     } catch (error) {
       if (
-        error.code === "ERR_SQLITE_ERROR" &&
-        error.message.includes("UNIQUE")
+        error.code === "23505"
       ) {
         return fail(
           res,
@@ -537,8 +410,8 @@ async function api(req, res, url) {
   if (req.method === "POST" && pathname === "/api/auth/login") {
     const data = await body(req);
 
-    const user = db
-      .prepare("SELECT * FROM users WHERE email = ?")
+    const user = await db
+      .prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?)")
       .get(
         String(data.email || "")
           .trim()
@@ -571,19 +444,19 @@ async function api(req, res, url) {
       );
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users
       SET
-        last_login_at = datetime('now'),
-        updated_at = datetime('now')
+        last_login_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(user.id);
 
-    const updatedUser = db
+    const updatedUser = await db
       .prepare("SELECT * FROM users WHERE id = ?")
       .get(user.id);
       if (updatedUser.role === "admin") {
-  writeAdminLog({
+  await writeAdminLog({
     adminId: updatedUser.id,
     action: "LOGIN",
     entityType: "Admin",
@@ -594,7 +467,7 @@ async function api(req, res, url) {
   });
 }
 if (updatedUser.role === "admin") {
-  writeAdminLog({
+  await writeAdminLog({
     adminId: updatedUser.id,
     action: "LOGIN",
     entityType: "Admin",
@@ -603,8 +476,8 @@ if (updatedUser.role === "admin") {
   });
 }
     return json(res, 200, {
-      ...issueSession(user.id),
-      user: publicUser(db, updatedUser),
+      ...await issueSession(user.id),
+      user: await publicUser(db, updatedUser),
     });
   }
 
@@ -612,7 +485,7 @@ if (updatedUser.role === "admin") {
   req.method === "POST" &&
   pathname === "/api/auth/logout"
 ) {
-  const currentUser = userByToken(req);
+  const currentUser = await userByToken(req);
 
   const token =
     req.headers.authorization
@@ -622,7 +495,7 @@ if (updatedUser.role === "admin") {
     currentUser &&
     currentUser.role === "admin"
   ) {
-    writeAdminLog({
+    await writeAdminLog({
       adminId: currentUser.id,
       action: "LOGOUT",
       entityType: "Admin",
@@ -632,7 +505,7 @@ if (updatedUser.role === "admin") {
   }
 
   if (token) {
-    db.prepare(`
+    await db.prepare(`
       DELETE FROM sessions
       WHERE token_hash = ?
     `).run(hashToken(token));
@@ -642,14 +515,14 @@ if (updatedUser.role === "admin") {
 }
 
   if (req.method === "GET" && pathname === "/api/auth/me") {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
 
     if (!user) {
       return;
     }
 
     return json(res, 200, {
-      user: publicUser(db, user),
+      user: await publicUser(db, user),
     });
   }
 
@@ -657,79 +530,79 @@ if (updatedUser.role === "admin") {
     req.method === "GET" &&
     pathname === "/api/admin/dashboard"
   ) {
-    const admin = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
     if (!admin) {
       return;
     }
 
-    const totalUsers = db
+    const totalUsers = (await db
       .prepare("SELECT COUNT(*) AS total FROM users")
-      .get().total;
+      .get()).total;
 
-    const totalCandidates = db.prepare(`
+    const totalCandidates = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM users
       WHERE role = 'candidate'
-    `).get().total;
+    `).get()).total;
 
-    const totalEmployers = db.prepare(`
+    const totalEmployers = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM users
       WHERE role = 'employer'
-    `).get().total;
+    `).get()).total;
 
-    const lockedUsers = db.prepare(`
+    const lockedUsers = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM users
       WHERE status = 'Locked'
-    `).get().total;
+    `).get()).total;
 
-    const totalJobs = db
+    const totalJobs = (await db
       .prepare("SELECT COUNT(*) AS total FROM jobs")
-      .get().total;
+      .get()).total;
 
-    const pendingJobs = db.prepare(`
+    const pendingJobs = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM jobs
       WHERE status = 'Pending'
-    `).get().total;
+    `).get()).total;
 
-    const approvedJobs = db.prepare(`
+    const approvedJobs = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM jobs
       WHERE status = 'Approved'
-    `).get().total;
+    `).get()).total;
 
-    const rejectedJobs = db.prepare(`
+    const rejectedJobs = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM jobs
       WHERE status = 'Rejected'
-    `).get().total;
+    `).get()).total;
 
-    const closedJobs = db.prepare(`
+    const closedJobs = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM jobs
       WHERE status = 'Closed'
-    `).get().total;
+    `).get()).total;
 
-    const totalApplications = db
+    const totalApplications = (await db
       .prepare("SELECT COUNT(*) AS total FROM applications")
-      .get().total;
+      .get()).total;
 
-    const hiredApplications = db.prepare(`
+    const hiredApplications = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM applications
       WHERE status = 'Da tuyen'
-    `).get().total;
+    `).get()).total;
 
-    const rejectedApplications = db.prepare(`
+    const rejectedApplications = (await db.prepare(`
       SELECT COUNT(*) AS total
       FROM applications
       WHERE status = 'Tu choi'
-    `).get().total;
+    `).get()).total;
 
-    const recentUsers = db.prepare(`
+    const recentUsers = await db.prepare(`
       SELECT
         id,
         name,
@@ -742,7 +615,7 @@ if (updatedUser.role === "admin") {
       LIMIT 5
     `).all();
 
-    const recentJobs = db.prepare(`
+    const recentJobs = await db.prepare(`
       SELECT
         id,
         title,
@@ -782,7 +655,7 @@ if (
   req.method === "GET" &&
   pathname === "/api/admin/users"
 ) {
-  const admin = requireUser(req, res, ["admin"]);
+  const admin = await requireUser(req, res, ["admin"]);
 
   if (!admin) {
     return;
@@ -806,8 +679,8 @@ if (
   if (keyword) {
     clauses.push(`
       (
-        name LIKE ?
-        OR email LIKE ?
+        name ILIKE ?
+        OR email ILIKE ?
       )
     `);
 
@@ -837,7 +710,7 @@ if (
       ? `WHERE ${clauses.join(" AND ")}`
       : "";
 
-  const users = db.prepare(`
+  const users = await db.prepare(`
     SELECT
       id,
       name,
@@ -873,7 +746,7 @@ if (
   req.method === "GET" &&
   pathname === "/api/admin/companies"
 ) {
-  const admin = requireUser(req, res, ["admin"]);
+  const admin = await requireUser(req, res, ["admin"]);
 
   if (!admin) {
     return;
@@ -896,8 +769,8 @@ if (
   if (keyword) {
   clauses.push(`
     (
-      u.name LIKE ?
-      OR u.email LIKE ?
+      u.name ILIKE ?
+      OR u.email ILIKE ?
     )
   `);
 
@@ -916,7 +789,7 @@ if (
   const whereClause =
     `WHERE ${clauses.join(" AND ")}`;
 
-  const companies = db.prepare(`
+  const companies = await db.prepare(`
   SELECT
     u.id,
     u.name,
@@ -986,7 +859,7 @@ if (
   req.method === "GET" &&
   pathname === "/api/admin/applications"
 ) {
-  const admin = requireUser(
+  const admin = await requireUser(
     req,
     res,
     ["admin"],
@@ -1010,10 +883,10 @@ if (
   if (keyword) {
     clauses.push(`
       (
-        candidate.name LIKE ?
-        OR candidate.email LIKE ?
-        OR job.title LIKE ?
-        OR job.company LIKE ?
+        candidate.name ILIKE ?
+        OR candidate.email ILIKE ?
+        OR job.title ILIKE ?
+        OR job.company ILIKE ?
       )
     `);
 
@@ -1041,7 +914,7 @@ if (
       ? `WHERE ${clauses.join(" AND ")}`
       : "";
 
-  const applications = db.prepare(`
+  const applications = await db.prepare(`
   SELECT
     application.id,
     application.candidate_id,
@@ -1131,7 +1004,7 @@ if (
   pathname === "/api/admin/reports"
 ) {
   const admin =
-    requireUser(
+    await requireUser(
       req,
       res,
       ["admin"],
@@ -1159,9 +1032,9 @@ if (
   if (keyword) {
 
     clauses.push(`(
-      reporter.name LIKE ?
-      OR reporter.email LIKE ?
-      OR reports.reason LIKE ?
+      reporter.name ILIKE ?
+      OR reporter.email ILIKE ?
+      OR reports.reason ILIKE ?
     )`);
 
     const search = `%${keyword}%`;
@@ -1198,7 +1071,7 @@ if (
         )}`
       : "";
 
-  const reports = db.prepare(`
+  const reports = await db.prepare(`
 SELECT
 
     reports.id,
@@ -1289,7 +1162,7 @@ if (
   req.method === "GET" &&
   pathname === "/api/admin/logs"
 ) {
-  const admin = requireUser(
+  const admin = await requireUser(
     req,
     res,
     ["admin"],
@@ -1313,11 +1186,11 @@ if (
   if (keyword) {
     clauses.push(`
       (
-        admin_user.name LIKE ?
-        OR admin_user.email LIKE ?
-        OR admin_logs.action LIKE ?
-        OR admin_logs.entity_type LIKE ?
-        OR admin_logs.note LIKE ?
+        admin_user.name ILIKE ?
+        OR admin_user.email ILIKE ?
+        OR admin_logs.action ILIKE ?
+        OR admin_logs.entity_type ILIKE ?
+        OR admin_logs.note ILIKE ?
       )
     `);
 
@@ -1344,7 +1217,7 @@ if (
       ? `WHERE ${clauses.join(" AND ")}`
       : "";
 
-  const logs = db.prepare(`
+  const logs = await db.prepare(`
     SELECT
       admin_logs.id,
       admin_logs.admin_id,
@@ -1397,7 +1270,7 @@ if (
   req.method === "GET" &&
   pathname === "/api/admin/settings"
 ) {
-  const admin = requireUser(
+  const admin = await requireUser(
     req,
     res,
     ["admin"],
@@ -1407,7 +1280,7 @@ if (
     return;
   }
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT
       setting_key,
       setting_value,
@@ -1436,7 +1309,7 @@ if (
   req.method === "PUT" &&
   pathname === "/api/admin/settings"
 ) {
-  const admin = requireUser(
+  const admin = await requireUser(
     req,
     res,
     ["admin"],
@@ -1506,7 +1379,7 @@ if (
     );
   }
 
-  const oldRows = db.prepare(`
+  const oldRows = await db.prepare(`
     SELECT
       setting_key,
       setting_value
@@ -1521,7 +1394,8 @@ if (
       ]),
     );
 
-  const updateSetting = db.prepare(`
+  await db.transaction(async (tx) => {
+  const updateSetting = tx.prepare(`
     INSERT INTO system_settings (
       setting_key,
       setting_value,
@@ -1531,7 +1405,7 @@ if (
     VALUES (
       ?,
       ?,
-      datetime('now'),
+      CURRENT_TIMESTAMP,
       ?
     )
 
@@ -1541,14 +1415,11 @@ if (
         excluded.setting_value,
 
       updated_at =
-        datetime('now'),
+        CURRENT_TIMESTAMP,
 
       updated_by =
         excluded.updated_by
   `);
-
-  try {
-  db.exec("BEGIN");
 
   for (const key of allowedKeys) {
     if (
@@ -1557,7 +1428,7 @@ if (
         key,
       )
     ) {
-      updateSetting.run(
+      await updateSetting.run(
         key,
         String(data[key]),
         admin.id,
@@ -1565,20 +1436,8 @@ if (
     }
   }
 
-  db.exec("COMMIT");
-} catch (error) {
-  try {
-    db.exec("ROLLBACK");
-  } catch {
-    // Không làm gì nếu transaction chưa bắt đầu.
-  }
-
-  throw error;
-}
-
-
-
-  const newRows = db.prepare(`
+  });
+  const newRows = await db.prepare(`
     SELECT
       setting_key,
       setting_value
@@ -1594,7 +1453,7 @@ if (
     );
 
   /* Ghi Nhật ký Admin */
-  writeAdminLog({
+  await writeAdminLog({
     adminId: admin.id,
     action: "UPDATE_SETTINGS",
     entityType: "System",
@@ -1610,9 +1469,9 @@ if (
       "Cập nhật cấu hình hệ thống",
   });
 
-  const updateInfo = db.prepare(`
+  const updateInfo = await db.prepare(`
     SELECT
-      datetime('now') AS updated_at,
+      CURRENT_TIMESTAMP AS updated_at,
       id,
       name,
       email
@@ -1687,7 +1546,7 @@ function buildAdminLogDescription(log) {
   );
 
   if (req.method === "PATCH" && adminUserParams) {
-    const admin = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
     if (!admin) {
       return;
@@ -1735,7 +1594,7 @@ function buildAdminLogDescription(log) {
       );
     }
 
-    const oldUser = db.prepare(`
+    const oldUser = await db.prepare(`
       SELECT
         id,
         name,
@@ -1756,16 +1615,16 @@ function buildAdminLogDescription(log) {
       );
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users
       SET
         status = ?,
         locked_reason = ?,
         locked_at = CASE
-          WHEN ? = 'Locked' THEN datetime('now')
+          WHEN ? = 'Locked' THEN CURRENT_TIMESTAMP
           ELSE NULL
         END,
-        updated_at = datetime('now')
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
       nextStatus,
@@ -1773,7 +1632,7 @@ function buildAdminLogDescription(log) {
       nextStatus,
       targetUserId,
     );
-writeAdminLog({
+await writeAdminLog({
   adminId: admin.id,
 
   action:
@@ -1806,14 +1665,14 @@ writeAdminLog({
       : `Mở khóa tài khoản ${oldUser.name}`,
 });
     if (nextStatus === "Locked") {
-      db.prepare(
+      await db.prepare(
         "DELETE FROM sessions WHERE user_id = ?",
       ).run(targetUserId);
     }
 
-    const updatedUser = selectAdminUserById(targetUserId);
+    const updatedUser = await selectAdminUserById(targetUserId);
 
-    writeAdminLog({
+    await writeAdminLog({
       adminId: admin.id,
       action:
         nextStatus === "Locked"
@@ -1847,7 +1706,7 @@ writeAdminLog({
   );
 
   if (req.method === "PATCH" && adminUserParams) {
-    const admin = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
     if (!admin) {
       return;
@@ -1885,7 +1744,7 @@ writeAdminLog({
       );
     }
 
-    const oldUser = db.prepare(`
+    const oldUser = await db.prepare(`
       SELECT
         id,
         name,
@@ -1905,14 +1764,14 @@ writeAdminLog({
       );
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users
       SET
         role = ?,
-        updated_at = datetime('now')
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(nextRole, targetUserId);
-writeAdminLog({
+await writeAdminLog({
   adminId: admin.id,
   action: "UPDATE_ROLE",
   entityType: "User",
@@ -1929,13 +1788,13 @@ writeAdminLog({
   note:
     `Đổi vai trò của ${oldUser.name} từ ${oldUser.role} sang ${nextRole}`,
 });
-    db.prepare(
+    await db.prepare(
       "DELETE FROM sessions WHERE user_id = ?",
     ).run(targetUserId);
 
-    const updatedUser = selectAdminUserById(targetUserId);
+    const updatedUser = await selectAdminUserById(targetUserId);
 
-    writeAdminLog({
+    await writeAdminLog({
       adminId: admin.id,
       action: "CHANGE_USER_ROLE",
       entityType: "User",
@@ -1956,14 +1815,14 @@ writeAdminLog({
   );
 
   if (req.method === "GET" && adminUserParams) {
-    const admin = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
     if (!admin) {
       return;
     }
 
     const targetUserId = Number(adminUserParams.id);
-    const user = selectAdminUserById(targetUserId);
+    const user = await selectAdminUserById(targetUserId);
 
     if (!user) {
       return fail(
@@ -1978,7 +1837,7 @@ writeAdminLog({
   }
 
   if (req.method === "DELETE" && adminUserParams) {
-    const admin = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
     if (!admin) {
       return;
@@ -2004,7 +1863,7 @@ writeAdminLog({
       );
     }
 
-    const targetUser = db.prepare(`
+    const targetUser = await db.prepare(`
       SELECT
         id,
         name,
@@ -2033,7 +1892,7 @@ writeAdminLog({
       );
     }
 
-    writeAdminLog({
+    await writeAdminLog({
       adminId: admin.id,
       action: "DELETE_USER",
       entityType: "User",
@@ -2042,7 +1901,7 @@ writeAdminLog({
       note: "Xóa tài khoản khỏi hệ thống",
     });
 
-    const result = db
+    const result = await db
       .prepare("DELETE FROM users WHERE id = ?")
       .run(targetUserId);
 
@@ -2062,7 +1921,7 @@ writeAdminLog({
   }
 
   if (req.method === "GET" && pathname === "/api/jobs") {
-    const current = userByToken(req);
+    const current = await userByToken(req);
     const clauses = [];
     const values = [];
 
@@ -2091,14 +1950,14 @@ writeAdminLog({
 
     if (searchParams.get("q")) {
       clauses.push(
-        "(title LIKE ? OR company LIKE ? OR description LIKE ?)",
+        "(title ILIKE ? OR company ILIKE ? OR description ILIKE ?)",
       );
       values.push(
         ...Array(3).fill(`%${searchParams.get("q")}%`),
       );
     }
 
-    const jobs = db.prepare(`
+    const jobs = await db.prepare(`
       SELECT *
       FROM jobs
       ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
@@ -2114,14 +1973,14 @@ writeAdminLog({
   let params = route("/api/jobs/:id", pathname);
 
   if (req.method === "GET" && params) {
-    const job = db
+    const job = await db
       .prepare("SELECT * FROM jobs WHERE id = ?")
       .get(Number(params.id));
 
     if (
       !job ||
       (job.status !== "Approved" &&
-        userByToken(req)?.role !== "admin")
+        (await userByToken(req))?.role !== "admin")
     ) {
       return fail(
         res,
@@ -2137,7 +1996,7 @@ writeAdminLog({
   }
 
   if (req.method === "POST" && pathname === "/api/jobs") {
-    const user = requireUser(req, res, ["employer", "admin"]);
+    const user = await requireUser(req, res, ["employer", "admin"]);
 
     if (!user) {
       return;
@@ -2162,7 +2021,7 @@ writeAdminLog({
       }
     }
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO jobs(
         employer_id,
         title,
@@ -2201,7 +2060,7 @@ writeAdminLog({
       data.saturday || "unknown",
     );
 
-    const job = db
+    const job = await db
       .prepare("SELECT * FROM jobs WHERE id = ?")
       .get(result.lastInsertRowid);
 
@@ -2213,13 +2072,15 @@ writeAdminLog({
   params = route("/api/jobs/:id/status", pathname);
 
   if (req.method === "PATCH" && params) {
-    const user = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
-    if (!user) {
+    if (!admin) {
       return;
     }
 
     const data = await body(req);
+    const jobId = Number(params.id);
+    const nextStatus = data.status;
 
     if (
       !["Pending", "Approved", "Rejected", "Closed"].includes(
@@ -2233,7 +2094,7 @@ writeAdminLog({
         "VALIDATION_ERROR",
       );
     }
-const oldJob = db.prepare(`
+const oldJob = await db.prepare(`
   SELECT
     id,
     title,
@@ -2251,11 +2112,11 @@ if (!oldJob) {
     "JOB_NOT_FOUND",
   );
 }
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE jobs
       SET
         status = ?,
-        updated_at = datetime('now')
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(data.status, Number(params.id));
 const jobActionMap = {
@@ -2272,7 +2133,7 @@ const jobActionLabelMap = {
   Pending: "Chuyển tin về trạng thái chờ duyệt",
 };
 
-writeAdminLog({
+await writeAdminLog({
   adminId: admin.id,
 
   action:
@@ -2306,7 +2167,7 @@ writeAdminLog({
       );
     }
 
-    const job = db
+    const job = await db
       .prepare("SELECT * FROM jobs WHERE id = ?")
       .get(Number(params.id));
 
@@ -2321,7 +2182,7 @@ writeAdminLog({
   );
 
   if (req.method === "DELETE" && deleteJobParams) {
-    const admin = requireUser(req, res, ["admin"]);
+    const admin = await requireUser(req, res, ["admin"]);
 
     if (!admin) {
       return;
@@ -2338,7 +2199,7 @@ writeAdminLog({
       );
     }
 
-    const oldJob = db.prepare(`
+    const oldJob = await db.prepare(`
       SELECT
         id,
         title,
@@ -2357,7 +2218,7 @@ writeAdminLog({
       );
     }
 
-    writeAdminLog({
+    await writeAdminLog({
       adminId: admin.id,
       action: "DELETE_JOB",
       entityType: "Job",
@@ -2366,7 +2227,7 @@ writeAdminLog({
       note: "Xóa tin tuyển dụng khỏi hệ thống",
     });
 
-    db.prepare(
+    await db.prepare(
       "DELETE FROM jobs WHERE id = ?",
     ).run(jobId);
 
@@ -2380,14 +2241,14 @@ writeAdminLog({
     req.method === "POST" &&
     pathname === "/api/applications"
   ) {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
 
     if (!user) {
       return;
     }
 
     const data = await body(req);
-    const job = db.prepare(`
+    const job = await db.prepare(`
       SELECT *
       FROM jobs
       WHERE id = ? AND status = 'Approved'
@@ -2403,7 +2264,7 @@ writeAdminLog({
     }
 
     try {
-      const applicationId = db.prepare(`
+      const applicationId = (await db.prepare(`
         INSERT INTO applications(
           candidate_id,
           job_id,
@@ -2414,9 +2275,9 @@ writeAdminLog({
         user.id,
         job.id,
         String(data.coverLetter || ""),
-      ).lastInsertRowid;
+      )).lastInsertRowid;
 
-      const application = db.prepare(`
+      const application = await db.prepare(`
         SELECT *
         FROM applications
         WHERE id = ?
@@ -2424,7 +2285,7 @@ writeAdminLog({
 
       return json(res, 201, { application });
     } catch (error) {
-      if (error.message.includes("UNIQUE")) {
+      if (error.code === "23505") {
         return fail(
           res,
           409,
@@ -2441,7 +2302,7 @@ writeAdminLog({
     req.method === "GET" &&
     pathname === "/api/applications"
   ) {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
 
     if (!user) {
       return;
@@ -2456,7 +2317,7 @@ writeAdminLog({
 
     const values = user.role === "admin" ? [] : [user.id];
 
-    const applications = db.prepare(`
+    const applications = await db.prepare(`
       SELECT
         a.*,
         u.name AS candidate_name,
@@ -2475,7 +2336,7 @@ writeAdminLog({
   params = route("/api/applications/:id/status", pathname);
 
   if (req.method === "PATCH" && params) {
-    const user = requireUser(req, res, ["employer", "admin"]);
+    const user = await requireUser(req, res, ["employer", "admin"]);
 
     if (!user) {
       return;
@@ -2501,7 +2362,7 @@ writeAdminLog({
 
     const applicationId = Number(params.id);
     const ownerConstraint = user.role === "admin" ? "" : " AND j.employer_id = ?";
-    const oldApplication = db.prepare(`
+    const oldApplication = await db.prepare(`
       SELECT a.*, u.name AS candidate_name, j.title AS job_title, j.company
       FROM applications a
       JOIN users u ON u.id = a.candidate_id
@@ -2536,16 +2397,15 @@ writeAdminLog({
       },
     }[data.status];
 
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      db.prepare(`
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
         UPDATE applications
-        SET status = ?, updated_at = datetime('now')
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(data.status, applicationId);
 
       if (notificationContent && oldApplication.status !== data.status) {
-        db.prepare(`
+        await tx.prepare(`
           INSERT INTO notifications(candidate_id, application_id, job_id, type, title, message)
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(
@@ -2557,14 +2417,10 @@ writeAdminLog({
           notificationContent.message,
         );
       }
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
+    });
 
     if (user.role === "admin") {
-      writeAdminLog({
+      await writeAdminLog({
         adminId: user.id,
         action: "UPDATE_APPLICATION",
         entityType: "Application",
@@ -2575,7 +2431,7 @@ writeAdminLog({
       });
     }
 
-    const application = db.prepare(`
+    const application = await db.prepare(`
       SELECT *
       FROM applications
       WHERE id = ?
@@ -2585,13 +2441,13 @@ writeAdminLog({
   }
 
   if (req.method === "GET" && pathname === "/api/notifications") {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
     if (!user) return;
-    const notifications = db.prepare(`
+    const notifications = (await db.prepare(`
       SELECT * FROM notifications
       WHERE candidate_id = ?
       ORDER BY created_at DESC, id DESC
-    `).all(user.id).map(mapNotification);
+    `).all(user.id)).map(mapNotification);
     return json(res, 200, {
       notifications,
       unreadCount: notifications.filter((notification) => !notification.readAt).length,
@@ -2599,10 +2455,10 @@ writeAdminLog({
   }
 
   if (req.method === "PATCH" && pathname === "/api/notifications/read-all") {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
     if (!user) return;
-    const result = db.prepare(`
-      UPDATE notifications SET read_at = datetime('now')
+    const result = await db.prepare(`
+      UPDATE notifications SET read_at = CURRENT_TIMESTAMP
       WHERE candidate_id = ? AND read_at IS NULL
     `).run(user.id);
     return json(res, 200, { updated: result.changes });
@@ -2610,45 +2466,46 @@ writeAdminLog({
 
   params = route("/api/notifications/:id/read", pathname);
   if (req.method === "PATCH" && params) {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
     if (!user) return;
-    const result = db.prepare(`
-      UPDATE notifications SET read_at = COALESCE(read_at, datetime('now'))
+    const result = await db.prepare(`
+      UPDATE notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
       WHERE id = ? AND candidate_id = ?
     `).run(Number(params.id), user.id);
     if (!result.changes) return fail(res, 404, "Không tìm thấy thông báo", "NOT_FOUND");
-    const notification = db.prepare("SELECT * FROM notifications WHERE id = ?").get(Number(params.id));
+    const notification = await db.prepare("SELECT * FROM notifications WHERE id = ?").get(Number(params.id));
     return json(res, 200, { notification: mapNotification(notification) });
   }
 
   params = route("/api/saved-jobs/:jobId", pathname);
 
   if (params && req.method === "POST") {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
 
     if (!user) {
       return;
     }
 
-    db.prepare(`
-      INSERT OR IGNORE INTO saved_jobs(
+    await db.prepare(`
+      INSERT INTO saved_jobs(
         user_id,
         job_id
       )
       VALUES (?, ?)
+      ON CONFLICT (user_id, job_id) DO NOTHING
     `).run(user.id, Number(params.jobId));
 
     return json(res, 201, { saved: true });
   }
 
   if (params && req.method === "DELETE") {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
 
     if (!user) {
       return;
     }
 
-    db.prepare(`
+    await db.prepare(`
       DELETE FROM saved_jobs
       WHERE user_id = ? AND job_id = ?
     `).run(user.id, Number(params.jobId));
@@ -2660,25 +2517,25 @@ writeAdminLog({
     req.method === "GET" &&
     pathname === "/api/saved-jobs"
   ) {
-    const user = requireUser(req, res, ["candidate"]);
+    const user = await requireUser(req, res, ["candidate"]);
 
     if (!user) {
       return;
     }
 
-    const jobs = db.prepare(`
+    const jobs = (await db.prepare(`
       SELECT j.*
       FROM jobs j
       JOIN saved_jobs s ON s.job_id = j.id
       WHERE s.user_id = ?
       ORDER BY s.created_at DESC
-    `).all(user.id).map(mapJob);
+    `).all(user.id)).map(mapJob);
 
     return json(res, 200, { jobs });
   }
 
   if (req.method === "PATCH" && pathname === "/api/profile") {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
 
     if (!user) {
       return;
@@ -2704,11 +2561,11 @@ writeAdminLog({
     );
 
     if (updates.length) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE users
         SET
           ${updates.map(([, column]) => `${column} = ?`).join(", ")},
-          updated_at = datetime('now')
+          updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(
         ...updates.map(([key]) => String(data[key] ?? "").trim()),
@@ -2717,7 +2574,7 @@ writeAdminLog({
     }
 
     if (Array.isArray(data.skills)) {
-      db.prepare(
+      await db.prepare(
         "DELETE FROM user_skills WHERE user_id = ?",
       ).run(user.id);
 
@@ -2730,15 +2587,15 @@ writeAdminLog({
       ];
 
       for (const skill of uniqueSkills) {
-        db.prepare(
-          "INSERT OR IGNORE INTO skills(name) VALUES (?)",
+        await db.prepare(
+          "INSERT INTO skills(name) VALUES (?) ON CONFLICT DO NOTHING",
         ).run(skill);
 
-        const skillId = db
-          .prepare("SELECT id FROM skills WHERE name = ?")
-          .get(skill).id;
+        const skillId = (await db
+          .prepare("SELECT id FROM skills WHERE LOWER(name) = LOWER(?)")
+          .get(skill)).id;
 
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO user_skills(
             user_id,
             skill_id
@@ -2748,12 +2605,12 @@ writeAdminLog({
       }
     }
 
-    const updatedUser = db
+    const updatedUser = await db
       .prepare("SELECT * FROM users WHERE id = ?")
       .get(user.id);
 
     return json(res, 200, {
-      user: publicUser(db, updatedUser),
+      user: await publicUser(db, updatedUser),
     });
   }
 /* =========================================
@@ -2765,7 +2622,7 @@ if (
   req.method === "GET" &&
   pathname === "/api/admin/applications"
 ) {
-  const admin = requireUser(
+  const admin = await requireUser(
     req,
     res,
     ["admin"],
@@ -2789,10 +2646,10 @@ if (
   if (keyword) {
     clauses.push(`
       (
-        candidate.name LIKE ?
-        OR candidate.email LIKE ?
-        OR job.title LIKE ?
-        OR job.company LIKE ?
+        candidate.name ILIKE ?
+        OR candidate.email ILIKE ?
+        OR job.title ILIKE ?
+        OR job.company ILIKE ?
       )
     `);
 
@@ -2819,7 +2676,7 @@ if (
       ? `WHERE ${clauses.join(" AND ")}`
       : "";
 
-  const applications = db.prepare(`
+  const applications = await db.prepare(`
 SELECT
     application.id,
     application.candidate_id,

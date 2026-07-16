@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --experimental-sqlite server.js",
-    "dev": "node --experimental-sqlite --watch server.js",
-    "test": "node --experimental-sqlite --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:coverage": "node --experimental-sqlite --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
-    "test:node": "node --experimental-sqlite --test test/chatbox.test.js test/notifications.test.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "db:start": "docker compose -f docker/compose.yaml up -d postgres",
+    "db:migrate": "node --experimental-sqlite database/migrate-sqlite-to-postgres.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:node": "node --test test/chatbox.test.js test/notifications.test.js",
     "lint": "eslint ."
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
