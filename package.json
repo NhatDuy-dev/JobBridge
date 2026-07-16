@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node --experimental-sqlite server.js",
     "dev": "node --experimental-sqlite --watch server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**/*.js"
   },
   "engines": {
     "node": ">=22.5.0"

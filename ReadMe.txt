@@ -99,6 +99,15 @@ Chay test:
 
 npm test
 
+Chay coverage report:
+
+npm run test:coverage
+
+Ket qua coverage hien tai cho core backend src/**/*.js:
+- Lines: 85.58%
+- Branches: 71.43%
+- Functions: 85.71%
+
 7. SONARQUBE
 ------------
 SonarQube dung de kiem tra chat luong source code: bugs, bao mat, code smells, trung lap code va Quality Gate.

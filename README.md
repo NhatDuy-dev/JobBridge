@@ -437,6 +437,19 @@ Chạy toàn bộ test:
 npm test
 ```
 
+Chạy coverage report:
+
+```powershell
+npm run test:coverage
+```
+
+Coverage report hiện tại cho phần core backend `src/**/*.js`:
+
+- Lines: `85.58%`.
+- Branches: `71.43%`.
+- Functions: `85.71%`.
+- Kết quả này đạt yêu cầu coverage Level 1 `>= 70%` và Level 2 `>= 80%` theo line coverage.
+
 Các phần test hiện có:
 
 - Kiểm tra logic Admin.
