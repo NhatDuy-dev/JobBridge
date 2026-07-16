@@ -450,6 +450,10 @@ Coverage report hiện tại cho phần core backend `src/**/*.js`:
 - Functions: `85.71%`.
 - Kết quả này đạt yêu cầu coverage Level 1 `>= 70%` và Level 2 `>= 80%` theo line coverage.
 
+Ảnh minh chứng coverage report:
+
+![Coverage Report](docs/images/coverage-report.png)
+
 Các phần test hiện có:
 
 - Kiểm tra logic Admin.

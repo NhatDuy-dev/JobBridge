@@ -108,6 +108,9 @@ Ket qua coverage hien tai cho core backend src/**/*.js:
 - Branches: 71.43%
 - Functions: 85.71%
 
+Anh minh chung coverage da dinh kem trong README.md:
+- docs/images/coverage-report.png
+
 7. SONARQUBE
 ------------
 SonarQube dung de kiem tra chat luong source code: bugs, bao mat, code smells, trung lap code va Quality Gate.
