@@ -13,8 +13,10 @@ const DEFAULT_DATABASE_URL =
 const INSERT_ID_TABLES = new Set([
   "users",
   "skills",
+  "cvs",
   "jobs",
   "applications",
+  "job_reports",
   "notifications",
   "reports",
   "admin_logs",
@@ -200,13 +202,32 @@ export async function seedDatabase(db) {
     ];
     for (const job of jobs) await insertJob.run(...job);
 
+    const candidateCv = (await tx.prepare(`
+      INSERT INTO cvs
+        (candidate_id, name, source, profile_snapshot, original_file_name, mime_type, file_size)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      candidate,
+      "CV Nguyen Minh Anh",
+      "profile",
+      JSON.stringify({
+        desiredTitle: "Frontend Developer",
+        education: "Dai hoc Cong nghe - Cong nghe thong tin",
+        skills: ["ReactJS", "Figma", "JavaScript"],
+        experience: "1 nam",
+      }),
+      "",
+      "",
+      0,
+    )).lastInsertRowid;
+
     const insertApplication = tx.prepare(`
-      INSERT INTO applications(candidate_id, job_id, status, applied_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO applications(candidate_id, job_id, status, cv_id, cv_name, applied_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
-    await insertApplication.run(candidate, 101, "Da nop", "2026-07-01");
-    await insertApplication.run(candidate, 102, "Len lich phong van", "2026-07-03");
-    await insertApplication.run(candidate, 104, "Tu choi", "2026-07-05");
+    await insertApplication.run(candidate, 101, "Da nop", candidateCv, "CV Nguyen Minh Anh", "2026-07-01");
+    await insertApplication.run(candidate, 102, "Len lich phong van", candidateCv, "CV Nguyen Minh Anh", "2026-07-03");
+    await insertApplication.run(candidate, 104, "Tu choi", candidateCv, "CV Nguyen Minh Anh", "2026-07-05");
     await tx.prepare("INSERT INTO saved_jobs(user_id, job_id) VALUES (?, ?)").run(candidate, 102);
 
     for (const skill of ["ReactJS", "Figma", "JavaScript"]) {

@@ -13,12 +13,14 @@ https://trello.com/invite/b/6a49aa49287145e742d18c30/ATTI0006c8239a2d395639b405e
 ------------------
 Yeu cau:
 - Da cai Node.js 22 tro len.
+- Da cai Docker Desktop de chay PostgreSQL local, hoac da co PostgreSQL 14+.
 - Da giai nen source code JobBridge.
 
 Mo CMD/Terminal, di chuyen vao dung thu muc source code cua du an roi chay:
 
 cd <duong_dan_thu_muc_du_an_JobBridge>
 npm install
+npm run db:start
 npm start
 
 Vi du:
@@ -33,6 +35,8 @@ http://localhost:3000
 Luu y:
 - Khong mo truc tiep html/index.html bang Live Server de test dang nhap.
 - Khi demo phai giu terminal dang chay npm start.
+- Lenh npm run db:start dung Docker Compose de mo PostgreSQL local.
+- Neu khong dung Docker, dat bien DATABASE_URL tro den PostgreSQL co san.
 
 3. TAI KHOAN DEMO
 -----------------
@@ -55,28 +59,37 @@ Admin:
 
 4. THONG TIN CSDL
 -----------------
-He quan tri CSDL: SQLite
+CSDL chinh cua du an: PostgreSQL
 
-File CSDL demo nop kem source code:
-data/jobbridge.db
+Chuoi ket noi mac dinh khi chay bang Docker:
+postgresql://jobbridge:jobbridge@localhost:5432/jobbridge
 
-File cau truc CSDL:
+File cau truc CSDL chinh:
 database/schema.sql
 
+File CSDL SQLite demo nop kem source code:
+data/jobbridge.db
+
+File migrate du lieu SQLite sang PostgreSQL:
+database/migrate-sqlite-to-postgres.js
+
 Luu y:
-- File data/jobbridge.db da co san du lieu demo de thay/cham bai co the chay ngay.
-- Neu xoa file data/jobbridge.db, he thong se tu tao lai CSDL theo schema va du lieu mau khi chay npm start.
+- PostgreSQL la CSDL chinh khi chay ung dung bang npm start.
+- File data/jobbridge.db duoc nop kem de thay co the mo truc tiep xem du lieu mau.
+- Neu PostgreSQL trong, he thong se tu tao schema va du lieu mau khi chay npm start.
 - File README.md la tai lieu chinh cua du an, co mo ta chuc nang, cach chay, API va quy trinh.
 
-Cac bang chinh:
+Cac bang chinh trong schema PostgreSQL:
 - users: tai khoan nguoi dung
 - jobs: tin tuyen dung
 - applications: don ung tuyen
 - cvs: CV cua ung vien
 - saved_jobs: viec lam da luu
+- notifications: thong bao trong he thong
+- job_reports: bao cao tin tuyen dung cua ung vien
 - reports: bao cao vi pham
 - admin_logs: nhat ky quan tri
-- notifications: thong bao trong he thong
+- system_settings: cau hinh he thong
 
 Du lieu demo hien co:
 - 3 tai khoan nguoi dung
@@ -86,7 +99,18 @@ Du lieu demo hien co:
 
 5. CACH MO CSDL
 ---------------
-Dung DB Browser for SQLite:
+Mo CSDL chinh PostgreSQL:
+
+1. Chay npm run db:start de mo PostgreSQL.
+2. Mo pgAdmin hoac MySQL Workbench khong dung duoc voi PostgreSQL.
+3. Neu dung pgAdmin/psql, ket noi:
+   - Host: localhost
+   - Port: 5432
+   - Database: jobbridge
+   - User: jobbridge
+   - Password: jobbridge
+
+Mo file SQLite demo nop kem bang DB Browser for SQLite:
 
 1. Mo DB Browser for SQLite.
 2. Chon Open Database.
@@ -104,10 +128,10 @@ Chay coverage report:
 npm run test:coverage
 
 Ket qua coverage hien tai theo cau hinh Jest:
-- Statements: 91.42%
+- Statements: 91.5%
 - Branches: 77.27%
 - Functions: 88%
-- Lines: 91.75%
+- Lines: 91.83%
 
 Anh minh chung coverage da dinh kem trong README.md:
 - docs/images/coverage-report.png

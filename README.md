@@ -64,7 +64,7 @@ Dự án chạy theo mô hình SPA, dùng Node.js + Express cho backend REST API
 | Database | PostgreSQL 14+ |
 | Xác thực | Token session, hash mật khẩu |
 | Service mở rộng | Python FastAPI |
-| Kiểm thử | Node test runner |
+| Kiểm thử | Jest |
 | CI/CD | GitHub Actions |
 | Container | Docker Compose |
 
@@ -78,6 +78,8 @@ JobBridge
 │   ├── admin/              # Giao diện Admin
 │   ├── candidate/          # Giao diện ứng viên
 │   └── company/            # Giao diện công ty
+├── data/
+│   └── jobbridge.db        # File SQLite demo nộp kèm để xem dữ liệu mẫu
 ├── database/
 │   └── schema.sql          # Cấu trúc database PostgreSQL
 ├── docker/                 # Dockerfile và Docker Compose
@@ -264,16 +266,26 @@ Các bảng chính:
 | Bảng | Ý nghĩa |
 | --- | --- |
 | `users` | Tài khoản ứng viên, công ty, admin |
+| `cvs` | CV của ứng viên |
 | `jobs` | Tin tuyển dụng |
 | `applications` | Hồ sơ ứng tuyển |
 | `saved_jobs` | Việc làm đã lưu |
 | `notifications` | Thông báo cho ứng viên |
 | `sessions` | Phiên đăng nhập |
+| `job_reports` | Báo cáo tin tuyển dụng do ứng viên gửi |
 | `reports` | Báo cáo vi phạm |
 | `admin_logs` | Nhật ký hoạt động Admin |
 | `system_settings` | Cấu hình hệ thống |
 
 Có thể xem dữ liệu bằng `psql`, pgAdmin hoặc bất kỳ PostgreSQL client nào.
+
+File CSDL SQLite demo nộp kèm source code:
+
+```text
+data/jobbridge.db
+```
+
+File này dùng để thầy/cô mở nhanh bằng DB Browser for SQLite và kiểm tra dữ liệu mẫu gồm tài khoản, tin tuyển dụng, đơn ứng tuyển và CV. Khi chạy ứng dụng thật, hệ thống dùng PostgreSQL theo `database/schema.sql`.
 
 Cách reset dữ liệu demo:
 
@@ -450,10 +462,10 @@ npm run test:coverage
 
 Coverage report hiện tại cho phần core backend theo cấu hình Jest:
 
-- Statements: `91.42%`.
+- Statements: `91.5%`.
 - Branches: `77.27%`.
 - Functions: `88%`.
-- Lines: `91.75%`.
+- Lines: `91.83%`.
 - Kết quả này đạt yêu cầu coverage Level 1 `>= 70%` và Level 2 `>= 80%` theo line coverage.
 
 Ảnh minh chứng coverage report:
