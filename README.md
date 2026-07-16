@@ -119,10 +119,16 @@ Nếu máy chưa có Node.js hoặc Node quá cũ thì cần cài Node.js bản 
 Mở Terminal trong VS Code hoặc PowerShell tại thư mục dự án:
 
 ```powershell
-cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean
+cd <duong_dan_thu_muc_du_an_JobBridge>
 npm install
 npm run db:start
 npm start
+```
+
+Ví dụ nếu để dự án ở ổ D:
+
+```powershell
+cd D:\Nhom5\JobBridge
 ```
 
 Sau đó mở trình duyệt:
@@ -436,6 +442,24 @@ Chạy toàn bộ test:
 npm test
 ```
 
+Chạy coverage report:
+
+```powershell
+npm run test:coverage
+```
+
+Coverage report hiện tại cho phần core backend theo cấu hình Jest:
+
+- Statements: `91.42%`.
+- Branches: `77.27%`.
+- Functions: `88%`.
+- Lines: `91.75%`.
+- Kết quả này đạt yêu cầu coverage Level 1 `>= 70%` và Level 2 `>= 80%` theo line coverage.
+
+Ảnh minh chứng coverage report:
+
+![Coverage Report](docs/images/coverage-report.png)
+
 Các phần test hiện có:
 
 - Kiểm tra logic Admin.
@@ -459,7 +483,45 @@ Pipeline chạy khi push hoặc tạo Pull Request:
 
 Nếu CI hiện dấu xanh nghĩa là pipeline chạy thành công.
 
-## 14. Chạy bằng Docker Compose
+## 14. SonarQube Quality Gate (Level 2+)
+
+SonarQube được dùng để kiểm tra chất lượng source code, gồm bugs, vulnerabilities, security hotspots, code smells, duplications và coverage.
+
+Dashboard SonarQube local:
+
+```text
+http://localhost:9000/dashboard?id=jobbridge
+```
+
+Nếu máy đã có container SonarQube, mở lại bằng:
+
+```powershell
+docker start jobbridge-sonarqube
+```
+
+Kết quả đã chạy cho dự án JobBridge:
+
+- Scanner chạy thành công: `ANALYSIS SUCCESSFUL` và `EXECUTION SUCCESS`.
+- Quality Gate: `Passed`.
+- Bugs: `0`.
+- Vulnerabilities: `0`.
+- Security Rating: `A`.
+- Maintainability Rating: `A`.
+- Duplications: `1.1%`.
+
+Ảnh minh chứng dashboard SonarQube:
+
+![SonarQube Dashboard Passed](docs/images/sonarqube-dashboard-passed.png)
+
+Ảnh minh chứng quá trình scanner chạy thành công:
+
+![SonarQube Execution Success](docs/images/sonarqube-execution-success.png)
+
+Ảnh minh chứng điều kiện Quality Gate:
+
+![SonarQube Quality Gate Rules](docs/images/sonarqube-quality-gate-rules.png)
+
+## 15. Chạy bằng Docker Compose
 
 Chạy app:
 
@@ -499,7 +561,7 @@ Sau đó mở:
 http://localhost:8080
 ```
 
-## 15. Service FastAPI mở rộng
+## 16. Service FastAPI mở rộng
 
 Thư mục `auth_service` là service phụ cho Google OAuth, Zalo OAuth và đăng nhập bằng số điện thoại.
 
@@ -512,7 +574,7 @@ npm start
 Mở terminal khác:
 
 ```powershell
-cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean\auth_service
+cd <duong_dan_thu_muc_du_an_JobBridge>\auth_service
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 $env:FRONTEND_URL="http://localhost:3000"
@@ -539,7 +601,7 @@ http://localhost:8000/auth/oauth/google/callback
 http://localhost:8000/auth/oauth/zalo/callback
 ```
 
-## 16. Quy trình làm việc nhóm
+## Quy trình làm việc nhóm
 
 Quy trình đề xuất:
 
@@ -560,6 +622,6 @@ Definition of Done:
 - Chức năng chạy được local.
 - Giao diện và API đã kiểm thử bằng dữ liệu demo.
 - `npm test` chạy thành công.
-- Không commit `node_modules`, database local hoặc file log tạm.
+- Không commit `node_modules`, file log tạm hoặc thư mục tạm; chỉ giữ `data/jobbridge.db` khi cần nộp kèm CSDL demo.
 - Nếu thay đổi API hoặc cách chạy thì cập nhật README.
 
