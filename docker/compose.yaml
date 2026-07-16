@@ -16,11 +16,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_PATH: /app/data/jobbridge.db
+      DATABASE_URL: postgresql://jobbridge:${POSTGRES_PASSWORD:-jobbridge}@postgres:5432/jobbridge
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "${APP_PORT:-3000}:3000"
-    volumes:
-      - jobbridge_data:/app/data
     tmpfs:
       - /tmp:size=16m,mode=1777
     healthcheck:
@@ -35,6 +36,25 @@ services:
       start_period: 10s
     stop_grace_period: 10s
 
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jobbridge
+      POSTGRES_USER: jobbridge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobbridge}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - jobbridge_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobbridge -d jobbridge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
-  jobbridge_data:
-    name: jobbridge_data
+  jobbridge_postgres_data:
+    name: jobbridge_postgres_data

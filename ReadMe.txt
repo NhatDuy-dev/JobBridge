@@ -103,10 +103,11 @@ Chay coverage report:
 
 npm run test:coverage
 
-Ket qua coverage hien tai cho core backend src/**/*.js:
-- Lines: 85.58%
-- Branches: 71.43%
-- Functions: 85.71%
+Ket qua coverage hien tai theo cau hinh Jest:
+- Statements: 91.42%
+- Branches: 77.27%
+- Functions: 88%
+- Lines: 91.75%
 
 Anh minh chung coverage da dinh kem trong README.md:
 - docs/images/coverage-report.png

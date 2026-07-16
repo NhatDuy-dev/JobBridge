@@ -2,8 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 
-test("nhà tuyển dụng đổi trạng thái sẽ tạo thông báo cho đúng ứng viên", async (t) => {
-  process.env.DB_PATH = ":memory:";
+const integrationDatabaseUrl = process.env.TEST_DATABASE_URL;
+
+test("nhà tuyển dụng đổi trạng thái sẽ tạo thông báo cho đúng ứng viên", {
+  skip: !integrationDatabaseUrl,
+}, async (t) => {
+  process.env.DATABASE_URL = integrationDatabaseUrl;
   process.env.PORT = "0";
   const { server, db } = await import(`../server.js?notification-test=${Date.now()}`);
   if (!server.listening) await once(server, "listening");

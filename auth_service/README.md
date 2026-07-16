@@ -1,6 +1,6 @@
 # JobBridge FastAPI Authentication Service
 
-Service độc lập cho Google OAuth, Zalo OAuth và OTP số điện thoại. Service dùng chung `data/jobbridge.db` và bảng `sessions` với backend Express.
+Service độc lập cho Google OAuth, Zalo OAuth và OTP số điện thoại. Service dùng chung PostgreSQL và bảng `sessions` với backend Express. Cấu hình kết nối qua `DATABASE_URL`.
 
 ```powershell
 cd auth_service

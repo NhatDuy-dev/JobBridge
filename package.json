@@ -2,18 +2,45 @@
   "name": "jobbridge",
   "version": "1.0.0",
   "private": true,
-  "description": "JobBridge recruitment SPA with REST API and SQLite database",
   "type": "module",
   "scripts": {
-    "start": "node --experimental-sqlite server.js",
-    "dev": "node --experimental-sqlite --watch server.js",
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**/*.js"
-  },
-  "engines": {
-    "node": ">=22.5.0"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "db:start": "docker compose -f docker/compose.yaml up -d postgres",
+    "db:migrate": "node --experimental-sqlite database/migrate-sqlite-to-postgres.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:node": "node --test test/chatbox.test.js test/notifications.test.js",
+    "lint": "eslint ."
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "jest": "^30.4.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/auth.js",
+      "src/database.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/test/chatbox.test.js",
+      "/test/notifications.test.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 70,
+        "branches": 70,
+        "functions": 70,
+        "lines": 70
+      }
+    }
   }
 }

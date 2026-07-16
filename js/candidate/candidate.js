@@ -413,7 +413,7 @@ function renderCareerCategoryRail() {
     <section class="job-market-strip">
       <div class="job-market-heading">
         <div>
-          <strong>Tuyển dụng <span>${formatNumber(marketJobCount)} việc làm</span></strong>
+          <strong>Chào mừng đến với <span>trang chủ tuyển dụng</span></strong>
           <p>Trang chủ <span>/</span> Tuyển dụng ${formatNumber(marketJobCount)} việc làm ${currentYear}</p>
         </div>
         <button class="job-alert-button" data-create-job-alert type="button">Tạo thông báo việc làm</button>
