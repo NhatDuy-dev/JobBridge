@@ -555,6 +555,6 @@ Definition of Done:
 - Chức năng chạy được local.
 - Giao diện và API đã kiểm thử bằng dữ liệu demo.
 - `npm test` chạy thành công.
-- Không commit `node_modules`, database local hoặc file log tạm.
+- Không commit `node_modules`, file log tạm hoặc thư mục tạm; chỉ giữ `data/jobbridge.db` khi cần nộp kèm CSDL demo.
 - Nếu thay đổi API hoặc cách chạy thì cập nhật README.
 
