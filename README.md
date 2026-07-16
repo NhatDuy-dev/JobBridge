@@ -1,4 +1,9 @@
-# JobBridge - Hệ thống tuyển dụng và ứng tuyển việc làm
+﻿# JobBridge - Hệ thống tuyển dụng và ứng tuyển việc làm
+
+## Link dự án
+
+- GitHub repository: https://github.com/NhatDuy-dev/JobBridge
+- Trello board: https://trello.com/invite/b/6a49aa49287145e742d18c30/ATTI0006c8239a2d395639b405e8bf0fefc336B2BB24/jobbridge-tuy%E1%BB%83n-d%E1%BB%A5ng-%E1%BB%A9ng-tuy%E1%BB%83n-vi%E1%BB%87c-lam
 
 JobBridge là mini project môn Software Process and Quality Management. Dự án mô phỏng một nền tảng tuyển dụng có 3 vai trò chính:
 
@@ -553,12 +558,3 @@ Definition of Done:
 - Không commit `node_modules`, database local hoặc file log tạm.
 - Nếu thay đổi API hoặc cách chạy thì cập nhật README.
 
-## 17. Checklist nộp bài
-
-- Link GitHub repository.
-- README có mô tả, cách chạy và API.
-- GitHub Actions pipeline chạy thành công.
-- Báo cáo test/coverage.
-- Screenshot Trello/GitHub/chạy ứng dụng.
-- Báo cáo SPQM.
-- Video demo không quá 5 phút.

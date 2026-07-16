@@ -6,3 +6,4 @@ auth_service/.env
 auth_service/.venv/
 auth_service/__pycache__/
 node_modules/
+.scannerwork/
