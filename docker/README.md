@@ -21,7 +21,7 @@ Dừng ứng dụng:
 docker compose -f docker/compose.yaml down
 ```
 
-Dữ liệu SQLite vẫn được giữ trong volume `jobbridge_data`. Chỉ xóa dữ liệu khi chủ động thêm tùy chọn `-v` vào lệnh `down`.
+Dữ liệu PostgreSQL được giữ trong volume `jobbridge_postgres_data`. Chỉ xóa dữ liệu khi chủ động thêm tùy chọn `-v` vào lệnh `down`.
 
 Kiểm tra cấu hình Compose trước khi chạy:
 

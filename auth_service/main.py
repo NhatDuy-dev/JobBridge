@@ -3,24 +3,26 @@ import hashlib
 import json
 import os
 import secrets
-import sqlite3
 import time
 from pathlib import Path
 from urllib.parse import urlencode
 
 import httpx
+import psycopg
 from dotenv import load_dotenv
 from fastapi import Cookie, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from psycopg.rows import dict_row
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-DATABASE_PATH = Path(os.getenv("DATABASE_PATH", "../data/jobbridge.db"))
-if not DATABASE_PATH.is_absolute():
-    DATABASE_PATH = (ROOT / DATABASE_PATH).resolve()
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://jobbridge:jobbridge@localhost:5432/jobbridge",
+)
 
 app = FastAPI(title="JobBridge Authentication Service", version="1.0.0")
 app.add_middleware(
@@ -44,10 +46,7 @@ class OtpPayload(PhonePayload):
 
 
 def database():
-    connection = sqlite3.connect(DATABASE_PATH, timeout=5)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
 def token_hash(value: str) -> str:
@@ -62,17 +61,17 @@ def new_password_hash() -> str:
 
 
 def public_user(connection, user):
-    skills = [row[0] for row in connection.execute("SELECT s.name FROM skills s JOIN user_skills us ON us.skill_id=s.id WHERE us.user_id=? ORDER BY s.name", (user["id"],))]
-    saved = [row[0] for row in connection.execute("SELECT job_id FROM saved_jobs WHERE user_id=?", (user["id"],))]
-    applied = [row[0] for row in connection.execute("SELECT job_id FROM applications WHERE candidate_id=?", (user["id"],))]
+    skills = [row["name"] for row in connection.execute("SELECT s.name FROM skills s JOIN user_skills us ON us.skill_id=s.id WHERE us.user_id=%s ORDER BY s.name", (user["id"],))]
+    saved = [row["job_id"] for row in connection.execute("SELECT job_id FROM saved_jobs WHERE user_id=%s", (user["id"],))]
+    applied = [row["job_id"] for row in connection.execute("SELECT job_id FROM applications WHERE candidate_id=%s", (user["id"],))]
     return {"id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"], "phone": user["phone"], "location": user["location"], "desiredTitle": user["desired_title"], "skills": skills, "savedJobs": saved, "appliedJobs": applied}
 
 
 def issue_session(connection, user):
     token = secrets.token_urlsafe(32)
     expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 7 * 86400))
-    connection.execute("DELETE FROM sessions WHERE expires_at <= datetime('now')")
-    connection.execute("INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,?)", (secrets.token_hex(16), user["id"], token_hash(token), expires_at))
+    connection.execute("DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP")
+    connection.execute("INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(%s,%s,%s,%s)", (secrets.token_hex(16), user["id"], token_hash(token), expires_at))
     connection.commit()
     return {"token": token, "expiresAt": expires_at, "user": public_user(connection, user)}
 
@@ -80,11 +79,9 @@ def issue_session(connection, user):
 def upsert_oauth_user(profile):
     email = (profile.get("email") or f'{profile["provider"]}-{profile["id"]}@jobbridge.local').lower()
     with database() as connection:
-        user = connection.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        user = connection.execute("SELECT * FROM users WHERE LOWER(email)=LOWER(%s)", (email,)).fetchone()
         if not user:
-            cursor = connection.execute("INSERT INTO users(name,email,password_hash,role,desired_title) VALUES(?,?,?,?,?)", (profile["name"], email, new_password_hash(), "candidate", "Ứng viên JobBridge"))
-            connection.commit()
-            user = connection.execute("SELECT * FROM users WHERE id=?", (cursor.lastrowid,)).fetchone()
+            user = connection.execute("INSERT INTO users(name,email,password_hash,role,desired_title) VALUES(%s,%s,%s,%s,%s) RETURNING *", (profile["name"], email, new_password_hash(), "candidate", "Ứng viên JobBridge")).fetchone()
         if user["status"] == "Locked":
             raise HTTPException(403, "Tài khoản đã bị khóa")
         return issue_session(connection, user)
@@ -194,11 +191,9 @@ def verify_otp(payload: OtpPayload):
         raise HTTPException(401, "Mã OTP không đúng")
     otp_challenges.pop(phone, None)
     with database() as connection:
-        user = connection.execute("SELECT * FROM users WHERE phone=?", (phone,)).fetchone()
+        user = connection.execute("SELECT * FROM users WHERE phone=%s", (phone,)).fetchone()
         if not user:
-            cursor = connection.execute("INSERT INTO users(name,email,password_hash,role,desired_title,phone) VALUES(?,?,?,?,?,?)", (f"Người dùng {phone[-4:]}", f"phone-{phone}@jobbridge.local", new_password_hash(), "candidate", "Ứng viên JobBridge", phone))
-            connection.commit()
-            user = connection.execute("SELECT * FROM users WHERE id=?", (cursor.lastrowid,)).fetchone()
+            user = connection.execute("INSERT INTO users(name,email,password_hash,role,desired_title,phone) VALUES(%s,%s,%s,%s,%s,%s) RETURNING *", (f"Người dùng {phone[-4:]}", f"phone-{phone}@jobbridge.local", new_password_hash(), "candidate", "Ứng viên JobBridge", phone)).fetchone()
         if user["status"] == "Locked":
             raise HTTPException(403, "Tài khoản đã bị khóa")
         return issue_session(connection, user)

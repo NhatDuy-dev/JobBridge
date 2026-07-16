@@ -6,7 +6,7 @@ JobBridge là mini project môn Software Process and Quality Management. Dự á
 - Nhà tuyển dụng: đăng tin tuyển dụng, quản lý tin, xem hồ sơ ứng viên và cập nhật kết quả tuyển dụng.
 - Admin: quản lý người dùng, tin tuyển dụng, doanh nghiệp, báo cáo vi phạm, nhật ký hoạt động và cấu hình hệ thống.
 
-Dự án chạy theo mô hình SPA, dùng Node.js + Express cho backend REST API và SQLite cho cơ sở dữ liệu.
+Dự án chạy theo mô hình SPA, dùng Node.js + Express cho backend REST API và PostgreSQL cho cơ sở dữ liệu.
 
 ## 1. Chức năng chính
 
@@ -56,7 +56,7 @@ Dự án chạy theo mô hình SPA, dùng Node.js + Express cho backend REST API
 | --- | --- |
 | Frontend | HTML, CSS, JavaScript |
 | Backend | Node.js, Express |
-| Database | SQLite |
+| Database | PostgreSQL 14+ |
 | Xác thực | Token session, hash mật khẩu |
 | Service mở rộng | Python FastAPI |
 | Kiểm thử | Node test runner |
@@ -74,7 +74,7 @@ JobBridge
 │   ├── candidate/          # Giao diện ứng viên
 │   └── company/            # Giao diện công ty
 ├── database/
-│   └── schema.sql          # Cấu trúc database SQLite
+│   └── schema.sql          # Cấu trúc database PostgreSQL
 ├── docker/                 # Dockerfile và Docker Compose
 ├── html/
 │   └── index.html          # Trang chính của SPA
@@ -98,6 +98,7 @@ Cần cài:
 
 - Node.js `22.5.0` trở lên.
 - npm.
+- PostgreSQL 14 trở lên (hoặc Docker Desktop).
 - Trình duyệt Chrome, Edge hoặc Firefox.
 
 Kiểm tra phiên bản Node.js:
@@ -115,6 +116,7 @@ Mở Terminal trong VS Code hoặc PowerShell tại thư mục dự án:
 ```powershell
 cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean
 npm install
+npm run db:start
 npm start
 ```
 
@@ -128,7 +130,8 @@ Lưu ý:
 
 - Không mở trực tiếp file `html/index.html` bằng Live Server để test đăng nhập.
 - Khi test app, luôn chạy `npm start` rồi mở `http://localhost:3000`.
-- Database sẽ tự tạo tại `data/jobbridge.db` khi chạy lần đầu.
+- Schema và dữ liệu demo được tự khởi tạo trong PostgreSQL khi chạy lần đầu.
+- Kết nối mặc định là `postgresql://jobbridge:jobbridge@localhost:5432/jobbridge`; có thể ghi đè bằng biến `DATABASE_URL`.
 
 Nếu cổng `3000` bị trùng, chạy bằng cổng khác:
 
@@ -239,10 +242,10 @@ Schema database nằm tại:
 database/schema.sql
 ```
 
-Database chạy thực tế nằm tại:
+Chuỗi kết nối local mặc định:
 
 ```text
-data/jobbridge.db
+postgresql://jobbridge:jobbridge@localhost:5432/jobbridge
 ```
 
 Các bảng chính:
@@ -259,26 +262,28 @@ Các bảng chính:
 | `admin_logs` | Nhật ký hoạt động Admin |
 | `system_settings` | Cấu hình hệ thống |
 
-Cách mở database bằng DB Browser for SQLite:
-
-1. Chạy dự án ít nhất một lần bằng `npm start`.
-2. Mở DB Browser for SQLite.
-3. Chọn `Open Database`.
-4. Mở file `data/jobbridge.db`.
-5. Vào tab `Browse Data` để xem dữ liệu từng bảng.
+Có thể xem dữ liệu bằng `psql`, pgAdmin hoặc bất kỳ PostgreSQL client nào.
 
 Cách reset dữ liệu demo:
 
-1. Tắt server.
-2. Xóa các file sau nếu có:
-   - `data/jobbridge.db`
-   - `data/jobbridge.db-shm`
-   - `data/jobbridge.db-wal`
-3. Chạy lại:
+1. Tắt stack Docker.
+2. Xóa volume PostgreSQL và khởi động lại:
 
 ```powershell
-npm start
+docker compose -f docker/compose.yaml down -v
+docker compose -f docker/compose.yaml up --build -d
 ```
+
+### Chuyển dữ liệu SQLite cũ
+
+Tạo một PostgreSQL trống, đặt chuỗi kết nối rồi chạy:
+
+```powershell
+$env:DATABASE_URL="postgresql://jobbridge:jobbridge@localhost:5432/jobbridge"
+npm run db:migrate -- data/jobbridge.db
+```
+
+Lệnh này tạo schema, sao chép dữ liệu theo đúng thứ tự khóa ngoại, giữ nguyên ID và cập nhật lại các sequence. Vì an toàn, lệnh sẽ dừng nếu PostgreSQL đích đã có user.
 
 ## 10. API chính
 
@@ -506,7 +511,7 @@ cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean\auth_service
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 $env:FRONTEND_URL="http://localhost:3000"
-$env:DATABASE_PATH="..\data\jobbridge.db"
+$env:DATABASE_URL="postgresql://jobbridge:jobbridge@localhost:5432/jobbridge"
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
 ```
 
