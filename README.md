@@ -118,9 +118,15 @@ Nếu máy chưa có Node.js hoặc Node quá cũ thì cần cài Node.js bản 
 Mở Terminal trong VS Code hoặc PowerShell tại thư mục dự án:
 
 ```powershell
-cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean
+cd <duong_dan_thu_muc_du_an_JobBridge>
 npm install
 npm start
+```
+
+Ví dụ nếu để dự án ở ổ D:
+
+```powershell
+cd D:\Nhom5\JobBridge
 ```
 
 Sau đó mở trình duyệt:
@@ -454,6 +460,25 @@ Pipeline chạy khi push hoặc tạo Pull Request:
 
 Nếu CI hiện dấu xanh nghĩa là pipeline chạy thành công.
 
+SonarQube Quality Gate dùng để kiểm tra chất lượng source code, gồm bugs, vulnerabilities, security hotspots, code smells, duplications và coverage.
+
+Dashboard SonarQube local:
+
+```text
+http://localhost:9000/dashboard?id=jobbridge
+```
+
+Nếu máy đã có container SonarQube, mở lại bằng:
+
+```powershell
+docker start jobbridge-sonarqube
+```
+
+Minh chứng cần chụp:
+
+- Dashboard SonarQube có `Quality Gate Passed`.
+- Terminal có dòng `ANALYSIS SUCCESSFUL` và `EXECUTION SUCCESS`.
+
 ## 14. Chạy bằng Docker Compose
 
 Chạy app:
@@ -507,7 +532,7 @@ npm start
 Mở terminal khác:
 
 ```powershell
-cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean\auth_service
+cd <duong_dan_thu_muc_du_an_JobBridge>\auth_service
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 $env:FRONTEND_URL="http://localhost:3000"

@@ -11,11 +11,18 @@ https://trello.com/invite/b/6a49aa49287145e742d18c30/ATTI0006c8239a2d395639b405e
 
 2. CACH CHAY LOCAL
 ------------------
-Mo CMD/Terminal tai thu muc source code va chay:
+Yeu cau:
+- Da cai Node.js 22 tro len.
+- Da giai nen source code JobBridge.
 
-cd C:\Users\ACER\Downloads\JobBridge-NhatDuy-clean
+Mo CMD/Terminal, di chuyen vao dung thu muc source code cua du an roi chay:
+
+cd <duong_dan_thu_muc_du_an_JobBridge>
 npm install
 npm start
+
+Vi du:
+cd D:\Nhom5\JobBridge
 
 Sau khi hien dong:
 JobBridge: http://localhost:3000
@@ -50,11 +57,16 @@ Admin:
 -----------------
 He quan tri CSDL: SQLite
 
-File CSDL demo:
+File CSDL demo nop kem source code:
 data/jobbridge.db
 
 File cau truc CSDL:
 database/schema.sql
+
+Luu y:
+- File data/jobbridge.db da co san du lieu demo de thay/cham bai co the chay ngay.
+- Neu xoa file data/jobbridge.db, he thong se tu tao lai CSDL theo schema va du lieu mau khi chay npm start.
+- File README.md la tai lieu chinh cua du an, co mo ta chuc nang, cach chay, API va quy trinh.
 
 Cac bang chinh:
 - users: tai khoan nguoi dung
@@ -89,11 +101,26 @@ npm test
 
 7. SONARQUBE
 ------------
-Dashboard SonarQube local:
+SonarQube dung de kiem tra chat luong source code: bugs, bao mat, code smells, trung lap code va Quality Gate.
+
+Neu may da co container SonarQube:
+
+docker start jobbridge-sonarqube
+
+Mo dashboard SonarQube local:
 http://localhost:9000/dashboard?id=jobbridge
 
-Ket qua da chay:
+Neu can quet lai source code:
+1. Mo SonarQube tai http://localhost:9000.
+2. Tao token trong My Account > Security.
+3. Chay scanner trong thu muc du an.
+
+Ket qua minh chung da chay:
 - Analysis successful.
 - Quality Gate Passed.
 - 0 Bugs.
 - 0 Vulnerabilities.
+
+Anh can chup de nop:
+- Dashboard SonarQube co Quality Gate Passed.
+- Terminal co dong ANALYSIS SUCCESSFUL va EXECUTION SUCCESS.
