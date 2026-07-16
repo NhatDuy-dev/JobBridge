@@ -124,3 +124,8 @@ Ket qua minh chung da chay:
 Anh can chup de nop:
 - Dashboard SonarQube co Quality Gate Passed.
 - Terminal co dong ANALYSIS SUCCESSFUL va EXECUTION SUCCESS.
+
+Anh minh chung da dinh kem trong README.md:
+- docs/images/sonarqube-dashboard-passed.png
+- docs/images/sonarqube-execution-success.png
+- docs/images/sonarqube-quality-gate-rules.png

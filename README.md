@@ -460,7 +460,9 @@ Pipeline chạy khi push hoặc tạo Pull Request:
 
 Nếu CI hiện dấu xanh nghĩa là pipeline chạy thành công.
 
-SonarQube Quality Gate dùng để kiểm tra chất lượng source code, gồm bugs, vulnerabilities, security hotspots, code smells, duplications và coverage.
+## 14. SonarQube Quality Gate (Level 2+)
+
+SonarQube được dùng để kiểm tra chất lượng source code, gồm bugs, vulnerabilities, security hotspots, code smells, duplications và coverage.
 
 Dashboard SonarQube local:
 
@@ -474,12 +476,29 @@ Nếu máy đã có container SonarQube, mở lại bằng:
 docker start jobbridge-sonarqube
 ```
 
-Minh chứng cần chụp:
+Kết quả đã chạy cho dự án JobBridge:
 
-- Dashboard SonarQube có `Quality Gate Passed`.
-- Terminal có dòng `ANALYSIS SUCCESSFUL` và `EXECUTION SUCCESS`.
+- Scanner chạy thành công: `ANALYSIS SUCCESSFUL` và `EXECUTION SUCCESS`.
+- Quality Gate: `Passed`.
+- Bugs: `0`.
+- Vulnerabilities: `0`.
+- Security Rating: `A`.
+- Maintainability Rating: `A`.
+- Duplications: `1.1%`.
 
-## 14. Chạy bằng Docker Compose
+Ảnh minh chứng dashboard SonarQube:
+
+![SonarQube Dashboard Passed](docs/images/sonarqube-dashboard-passed.png)
+
+Ảnh minh chứng quá trình scanner chạy thành công:
+
+![SonarQube Execution Success](docs/images/sonarqube-execution-success.png)
+
+Ảnh minh chứng điều kiện Quality Gate:
+
+![SonarQube Quality Gate Rules](docs/images/sonarqube-quality-gate-rules.png)
+
+## 15. Chạy bằng Docker Compose
 
 Chạy app:
 
@@ -519,7 +538,7 @@ Sau đó mở:
 http://localhost:8080
 ```
 
-## 15. Service FastAPI mở rộng
+## 16. Service FastAPI mở rộng
 
 Thư mục `auth_service` là service phụ cho Google OAuth, Zalo OAuth và đăng nhập bằng số điện thoại.
 
@@ -559,7 +578,7 @@ http://localhost:8000/auth/oauth/google/callback
 http://localhost:8000/auth/oauth/zalo/callback
 ```
 
-## 16. Quy trình làm việc nhóm
+## Quy trình làm việc nhóm
 
 Quy trình đề xuất:
 
